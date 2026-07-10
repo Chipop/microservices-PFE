@@ -14,8 +14,8 @@ class RegisterView(generics.CreateAPIView):
     def perform_create(self, serializer):
         user = serializer.save()
         # Réception: hand the new user to the Profiles service THROUGH the
-        # API gateway, rather than calling users-django directly.
-        gateway = os.environ.get("GATEWAY_URL", "http://gateway")
+        # API gateway, rather than calling user-service directly.
+        gateway = os.environ.get("GATEWAY_URL", "http://api-gateway")
         try:
             requests.post(
                 f"{gateway}/api/profiles/",
