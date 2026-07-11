@@ -154,3 +154,34 @@ SIMPLE_JWT = {
     "ALGORITHM": "HS256",
     "SIGNING_KEY": os.environ["JWT_SIGNING_KEY"],   # ← copy this EXACT string to every service
 }
+
+
+def env_int(name, default):
+    return int(os.environ.get(name, str(default)))
+
+
+def env_list(name, default):
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+PROFILE_STORAGE_BACKEND = os.environ.get("PROFILE_STORAGE_BACKEND", "local")
+PROFILE_STORAGE_LOCAL_ROOT = os.environ.get("PROFILE_STORAGE_LOCAL_ROOT", str(BASE_DIR / "media" / "profiles"))
+PROFILE_STORAGE_LOCAL_BASE_URL = os.environ.get("PROFILE_STORAGE_LOCAL_BASE_URL", "http://localhost:8001/media/profiles/")
+PROFILE_PICTURE_MAX_BYTES = env_int("PROFILE_PICTURE_MAX_BYTES", 2 * 1024 * 1024)
+PROFILE_PICTURE_ALLOWED_CONTENT_TYPES = env_list(
+    "PROFILE_PICTURE_ALLOWED_CONTENT_TYPES",
+    ["image/jpeg", "image/png", "image/webp"],
+)
+PROFILE_PICTURE_SIGNED_URL_TTL = timedelta(
+    seconds=env_int("PROFILE_PICTURE_SIGNED_URL_TTL_SECONDS", 900)
+)
+PROFILE_PICTURE_KEY_PREFIX = os.environ.get("PROFILE_PICTURE_KEY_PREFIX", "profile-pictures")
+
+AZURE_STORAGE_CONNECTION_STRING = os.environ.get("AZURE_STORAGE_CONNECTION_STRING", "")
+AZURE_STORAGE_ACCOUNT_URL = os.environ.get("AZURE_STORAGE_ACCOUNT_URL", "")
+AZURE_STORAGE_CONTAINER = os.environ.get("AZURE_STORAGE_CONTAINER", "")
+AZURE_STORAGE_ACCOUNT_NAME = os.environ.get("AZURE_STORAGE_ACCOUNT_NAME", "")
+AZURE_STORAGE_ACCOUNT_KEY = os.environ.get("AZURE_STORAGE_ACCOUNT_KEY", "")

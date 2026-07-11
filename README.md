@@ -64,11 +64,16 @@ Owns user accounts and credentials. Issues JWTs. Persists to its own `auth-db` P
 - `POST /api/auth/refresh/` — new access token from a refresh token
 
 ### `server/user-service/` — User/Profile service (port 8001, Django)
-Stores a read-only "profile" mirror of each user. A profile is created **only**
-via an internal call carrying the `X-Internal-Key` (never by an end user).
-Persists to its own `users-db` Postgres container.
+Owns user profile metadata and profile-picture storage integration. A profile is
+created via an internal call carrying the `X-Internal-Key`; authenticated users
+can read and update safe profile fields. Persists metadata to its own `users-db`
+Postgres container and stores profile-picture objects through the configured
+storage backend.
 - `GET /api/profiles/` — returns the caller's own profile (JWT-scoped)
 - `POST /api/profiles/` — internal only (used by auth-service during registration)
+- `PATCH /api/profiles/{id}/` — update safe profile fields
+- `GET /api/profiles/public/{username}/` — public profile fields
+- `POST / PUT / DELETE /api/profiles/picture/` — upload, replace, or remove profile picture
 
 ### `server/todo-service/` — Todo service (port 8003, NestJS)
 The actual TODO CRUD, and a **drop-in replacement** for the former Django todo service.
