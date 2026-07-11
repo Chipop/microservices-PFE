@@ -1,8 +1,9 @@
 # Tasks — Microservices Platform
 
 A task management application built to demonstrate a **microservices architecture**:
-three independent services under `server/` — two in **Django** (auth, profiles) and one in
-**NestJS** (tasks) — behind an **nginx API gateway**, **each with its own
+four independent services under `server/` — two in **Django** (auth, profiles),
+one in **NestJS** (tasks), and one in **Spring Boot** (workspaces) — behind an
+**nginx API gateway**, **each with its own
 PostgreSQL database** (database-per-service), with a **Quasar (Vue 3)**
 single-page frontend.
 
@@ -11,14 +12,15 @@ single-page frontend.
    Browser (SPA :9000) ──▶│   API Gateway — nginx :8080   │
                           └──────────────┬───────────────┘
                                          │ routes by URL prefix
-         ┌───────────────────────────────┼───────────────────────────────┐
-         ▼                               ▼                                ▼
-  /api/auth/  ───▶ auth-service    /api/profiles/ ─▶ user-service    /api/tasks/ ─▶ task-service
-   (8002, Django)                    (8001, Django)                   (8003, NestJS)
-   register / login / JWT            user profiles                    JWT-scoped tasks
-         │                               │                                │
-         ▼                               ▼                                ▼
-   auth-db  :5433                   users-db :5434                   tasks-db :5435
+         ┌──────────────────────┬──────────────────────┬──────────────────────┐
+         ▼                      ▼                      ▼                      ▼
+  /api/auth/              /api/profiles/          /api/tasks/           /api/workspaces/
+  auth-service            user-service            task-service          workspace-service
+  (8002, Django)          (8001, Django)          (8003, NestJS)        (8004, Spring Boot)
+  register / login / JWT  user profiles           JWT-scoped tasks      memberships
+         │                      │                      │                      │
+         ▼                      ▼                      ▼                      ▼
+   auth-db  :5433          users-db :5434          tasks-db :5435       workspaces-db :5436
    (Postgres)                       (Postgres)                       (Postgres)
    one database per service — separate containers & volumes, share nothing
 
@@ -39,9 +41,10 @@ single-page frontend.
 | **Frontend** | Quasar 2 (Vue 3, `<script setup>`), TypeScript, Pinia (stores), Vue Router (file-based routing), Vite |
 | **Auth + Profiles services** | Django 5.2, Django REST Framework, `djangorestframework-simplejwt` (JWT auth) |
 | **Task service** | NestJS 11 (TypeScript), TypeORM, `class-validator`, `@nestjs/jwt` (stateless HS256 verification) |
+| **Workspace service** | Spring Boot 3, Maven, Java 21, Spring Security resource server, Spring Data JPA, Flyway |
 | **API Gateway** | nginx (alpine) — reverse proxy / single entry point |
 | **Auth** | JWT (HS256), one shared `JWT_SIGNING_KEY` across all services; identity in the `user_id` claim |
-| **Database** | PostgreSQL 16 — **one container per service** (`auth-db`, `users-db`, `tasks-db`), each with its own volume; services share nothing |
+| **Database** | PostgreSQL 16 — **one container per service** (`auth-db`, `users-db`, `tasks-db`, `workspaces-db`), each with its own volume; services share nothing |
 | **Runtime** | Docker + Docker Compose (one network, `todonet`) |
 | **Test** | `integration-tests/test_services.py` — cross-service end-to-end check (Python `requests`) |
 
@@ -55,6 +58,7 @@ right service and passes CORS headers through. Clients only ever talk to `:8080`
 - `/api/auth/` → auth-service
 - `/api/profiles/` → user-service
 - `/api/tasks/` → task-service
+- `/api/workspaces/` → workspace-service
 
 ### `server/auth-service/` — Auth service (port 8002, Django)
 Owns user accounts and credentials. Issues JWTs. Persists to its own `auth-db` Postgres container.
@@ -89,6 +93,17 @@ Persists to its own `tasks-db` Postgres container via TypeORM.
 
   Task responses include `done` as a derived compatibility field, while the
   service stores richer task state internally.
+
+### `server/workspace-service/` — Workspace service (port 8004, Spring Boot)
+Owns workspace membership and invitation workflows. It validates the shared JWT,
+extracts the `user_id` claim, and enforces fixed workspace roles internally.
+Persists to its own `workspaces-db` Postgres container via Spring Data JPA and
+Flyway.
+- `GET / POST /api/workspaces/`
+- `GET / PATCH / DELETE /api/workspaces/{id}`
+- `POST /api/workspaces/{id}/archive`
+- `GET / POST /api/workspaces/{id}/invitations`
+- `POST /api/workspaces/invitations/{token}/accept`
 
 ### `server/legacy-todo-service/` — Former Todo service (Django, retired)
 The original Django implementation, kept for reference. It is **commented out** in
@@ -126,9 +141,11 @@ migrating/starting:
 | `auth-service` | http://localhost:8002 |
 | `user-service` | http://localhost:8001 |
 | `task-service` | http://localhost:8003 |
+| `workspace-service` | http://localhost:8004 |
 | `auth-db` (PostgreSQL) | localhost:5433 (`todo` / `todo`) |
 | `users-db` (PostgreSQL) | localhost:5434 (`todo` / `todo`) |
 | `tasks-db` (PostgreSQL) | localhost:5435 (`todo` / `todo`) |
+| `workspaces-db` (PostgreSQL) | localhost:5436 (`todo` / `todo`) |
 
 > The gateway is the intended entry point. The individual `8001/8002/8003`
 > ports are still exposed for convenience and for `integration-tests/test_services.py`.
@@ -165,13 +182,14 @@ python integration-tests/test_services.py
   any real deployment. `task-service` reads `JWT_SIGNING_KEY` and verifies the
   token with HS256 — it must match the key `auth-service` signs with.
 - Persistence is **database-per-service**: each service has its own PostgreSQL
-  container (`auth-db`, `users-db`, `tasks-db`) with its own Docker volume
-  (`auth_pgdata`, `users_pgdata`, `tasks_pgdata`). Services share nothing at the
+  container (`auth-db`, `users-db`, `tasks-db`, `workspaces-db`) with its own Docker volume
+  (`auth_pgdata`, `users_pgdata`, `tasks_pgdata`, `workspaces_pgdata`). Services share nothing at the
   data layer — they communicate only over HTTP. Each DB is created by its
   container's `POSTGRES_DB`.
 - `task-service` runs TypeORM with `TASK_SCHEMA_SYNC=true` in local Compose so
   task tables are created automatically on first boot. Set it to `false` and run
   explicit migrations before production.
+- `workspace-service` uses Flyway migrations and Hibernate schema validation.
 - CORS is enabled for local development (Django middleware / NestJS `enableCors`).
   Restrict it to the frontend origin before deploying.
 - The Django services fall back to SQLite when `POSTGRES_HOST` is unset, so a

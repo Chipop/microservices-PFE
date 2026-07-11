@@ -3,7 +3,7 @@
 End-to-end test for the task microservice platform.
 
 Walks the real cross-service flow:
-  Auth (register -> login -> JWT)  ->  Tasks (JWT-scoped CRUD)  ->  Profiles (réception + scoped reads)
+  Auth (register -> login -> JWT)  ->  Tasks / Workspaces (JWT-scoped)  ->  Profiles
 
 Run from anywhere that can reach the host ports:
     pip install requests
@@ -23,6 +23,7 @@ import requests
 AUTH     = "http://localhost:8002/api/auth"
 PROFILES = "http://localhost:8001/api/profiles"
 TASKS    = "http://localhost:8003/api/tasks"
+WORKSPACES = "http://localhost:8004/api/workspaces"
 
 INTERNAL_KEY = "INTERNAL-CHANGE-ME"   # must equal INTERNAL_API_KEY in compose
 
@@ -137,11 +138,45 @@ def main():
         check("second user does NOT see first user's tasks",
               "first task" not in bob_titles,
               detail=f"bob saw {bob_titles}")
+
+        # -------------------------------------------------------------------
+        section("5. WORKSPACES — create, invite, accept, and list members")
+        # -------------------------------------------------------------------
+        r = safe("post", f"{WORKSPACES}/",
+                 headers=auth_header,
+                 json={"name": f"workspace_{SUFFIX}", "description": "integration test"})
+        ok = r is not None and r.status_code == 201 and r.json().get("currentUserRole") == "OWNER"
+        check("create workspace returns 201 and owner role", ok,
+              detail=f"got {r.status_code if r else 'no response'}: {r.text if r else ''}")
+        workspace_id = r.json().get("id") if ok else None
+
+        invitation_token = None
+        if workspace_id:
+            r = safe("post", f"{WORKSPACES}/{workspace_id}/invitations",
+                     headers=auth_header,
+                     json={"email": f"{bob}@test.com", "role": "MEMBER"})
+            ok = r is not None and r.status_code == 201 and r.json().get("token")
+            check("invite workspace member returns a token", ok,
+                  detail=f"got {r.status_code if r else 'no response'}: {r.text if r else ''}")
+            invitation_token = r.json().get("token") if ok else None
+
+        if invitation_token:
+            r = safe("post", f"{WORKSPACES}/invitations/{invitation_token}/accept", headers=bob_header)
+            check("second user accepts workspace invitation",
+                  r is not None and r.status_code == 200 and r.json().get("status") == "ACCEPTED",
+                  detail=f"got {r.status_code if r else 'no response'}: {r.text if r else ''}")
+
+        if workspace_id:
+            r = safe("get", f"{WORKSPACES}/{workspace_id}/members", headers=auth_header)
+            member_ids = [m.get("userId") for m in r.json().get("members", [])] if (r and r.status_code == 200) else []
+            check("workspace member list includes owner and accepted member",
+                  len(member_ids) >= 2,
+                  detail=f"got {member_ids}")
     else:
         check("second user login (for scoping test)", False, detail="could not log in bob")
 
     # -----------------------------------------------------------------------
-    section("5. PROFILES — réception: profile was auto-created on registration")
+    section("6. PROFILES — réception: profile was auto-created on registration")
     # -----------------------------------------------------------------------
     # When alice registered, Auth should have POSTed her profile to Profiles.
     # Reading with alice's own JWT should return exactly her profile.
@@ -158,7 +193,7 @@ def main():
                      f"(if 401, profiles JWT auth isn't wired; if 200 but empty, réception didn't fire)")
 
     # -----------------------------------------------------------------------
-    section("6. PROFILES — guards: create needs the internal key, not a user JWT")
+    section("7. PROFILES — guards: create needs the internal key, not a user JWT")
     # -----------------------------------------------------------------------
     # A normal user JWT must NOT be allowed to create a profile directly.
     r = safe("post", f"{PROFILES}/", headers=auth_header,

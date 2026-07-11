@@ -21,6 +21,7 @@ The frontend and external clients should call the gateway instead of calling bac
 - Route `/api/auth/` to `auth-service`.
 - Route `/api/profiles/` to `user-service`.
 - Route `/api/tasks/` to `task-service`.
+- Route `/api/workspaces/` to `workspace-service`.
 - Forward common proxy headers.
 - Provide a lightweight root health response.
 
@@ -32,6 +33,7 @@ The frontend and external clients should call the gateway instead of calling bac
 | `/api/auth/` | `auth-service:8000` | Registration, login, JWT, account security. |
 | `/api/profiles/` | `user-service:8000` | Profile reads and internal profile creation. |
 | `/api/tasks/` | `task-service:8000` | JWT-scoped task management. |
+| `/api/workspaces/` | `workspace-service:8000` | Workspace membership and invitations. |
 
 ## Upstreams
 
@@ -41,6 +43,7 @@ Configured upstreams:
 upstream auth_service     { server auth-service:8000; }
 upstream profiles_service { server user-service:8000; }
 upstream tasks_service    { server task-service:8000; }
+upstream workspace_service { server workspace-service:8000; }
 ```
 
 Docker/Podman Compose resolves these names through the `todonet` network.
@@ -71,6 +74,7 @@ Compose declares dependencies on:
 - `auth-service`
 - `user-service`
 - `task-service`
+- `workspace-service`
 
 The gateway does not own data and has no database.
 
