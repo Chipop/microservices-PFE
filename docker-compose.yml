@@ -1,6 +1,4 @@
 services:
-  # --- One database PER microservice (true database-per-service). Each owns its
-  #     own Postgres container, volume, and host port. Services share nothing. ---
   auth-db:
     image: postgres:16-alpine
     container_name: auth-db
@@ -158,8 +156,7 @@ services:
         condition: service_healthy
     networks: [flowforge-platform-network]
 
-  # --- legacy-todo-service is retired. The active task-service below owns host
-  #     port 8003 and the gateway routes /api/tasks to it. ---
+  # --- legacy-todo-service 
   # legacy-todo-service:
   #   build: ./server/legacy-todo-service
   #   container_name: legacy-todo-service
@@ -176,7 +173,6 @@ services:
     build: ./server/task-service
     container_name: task-service
     environment:
-      # Same shared secret + HS256 + `user_id` claim as auth-service issues.
       - JWT_SIGNING_KEY=this-is-a-much-longer-shared-secret-key-32plus
       - PORT=8000
       - POSTGRES_HOST=tasks-db
@@ -261,8 +257,6 @@ services:
         condition: service_healthy
     networks: [flowforge-platform-network]
 
-  # API Gateway — the single public entry point. Routes /api/auth, /api/profiles,
-  # /api/tasks, /api/workspaces, /api/attachments and /api/notifications to the right service.
   api-gateway:
     image: nginx:alpine
     container_name: api-gateway
@@ -290,6 +284,35 @@ services:
     depends_on:
       - api-gateway
     networks: [flowforge-platform-network]
+  
+  rabbitmq:
+    image: rabbitmq:4.3.2-management-alpine
+    container_name: flowforge-rabbitmq
+    hostname: flowforge-rabbitmq
+
+    environment:
+      RABBITMQ_DEFAULT_USER: flowforge
+      RABBITMQ_DEFAULT_PASS: flowforge_password
+      RABBITMQ_DEFAULT_VHOST: flowforge
+
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+    networks:
+      - flowforge-platform-network
+
+    restart: unless-stopped
 
 volumes:
   auth_pgdata:
@@ -298,6 +321,9 @@ volumes:
   workspaces_pgdata:
   attachments_pgdata:
   notifications_pgdata:
+  rabbitmq_data:
 
 networks:
   flowforge-platform-network:
+    name: flowforge-platform-network
+    driver: bridge
