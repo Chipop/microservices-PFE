@@ -20,7 +20,7 @@ The frontend and external clients should call the gateway instead of calling bac
 - Expose one stable API origin: `http://localhost:8080`.
 - Route `/api/auth/` to `auth-service`.
 - Route `/api/profiles/` to `user-service`.
-- Route `/api/todos/` to `todo-service`.
+- Route `/api/tasks/` to `task-service`.
 - Forward common proxy headers.
 - Provide a lightweight root health response.
 
@@ -31,7 +31,7 @@ The frontend and external clients should call the gateway instead of calling bac
 | `/` | local nginx response | Health/info text. |
 | `/api/auth/` | `auth-service:8000` | Registration, login, JWT, account security. |
 | `/api/profiles/` | `user-service:8000` | Profile reads and internal profile creation. |
-| `/api/todos/` | `todo-service:8000` | JWT-scoped todo CRUD. |
+| `/api/tasks/` | `task-service:8000` | JWT-scoped task management. |
 
 ## Upstreams
 
@@ -40,7 +40,7 @@ Configured upstreams:
 ```nginx
 upstream auth_service     { server auth-service:8000; }
 upstream profiles_service { server user-service:8000; }
-upstream todos_service    { server todo-service:8000; }
+upstream tasks_service    { server task-service:8000; }
 ```
 
 Docker/Podman Compose resolves these names through the `todonet` network.
@@ -70,7 +70,7 @@ Compose declares dependencies on:
 
 - `auth-service`
 - `user-service`
-- `todo-service`
+- `task-service`
 
 The gateway does not own data and has no database.
 

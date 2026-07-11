@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-End-to-end test for the TODO microservice platform.
+End-to-end test for the task microservice platform.
 
 Walks the real cross-service flow:
-  Auth (register -> login -> JWT)  ->  Todos (JWT-scoped CRUD)  ->  Profiles (réception + scoped reads)
+  Auth (register -> login -> JWT)  ->  Tasks (JWT-scoped CRUD)  ->  Profiles (réception + scoped reads)
 
 Run from anywhere that can reach the host ports:
     pip install requests
@@ -22,7 +22,7 @@ import requests
 # ---------------------------------------------------------------------------
 AUTH     = "http://localhost:8002/api/auth"
 PROFILES = "http://localhost:8001/api/profiles"
-TODOS    = "http://localhost:8003/api/todos"
+TASKS    = "http://localhost:8003/api/tasks"
 
 INTERNAL_KEY = "INTERNAL-CHANGE-ME"   # must equal INTERNAL_API_KEY in compose
 
@@ -96,29 +96,35 @@ def main():
           detail=f"got {r.status_code if r else 'no response'}")
 
     # -----------------------------------------------------------------------
-    section("3. TODOS — JWT is required (the core cross-service proof)")
+    section("3. TASKS — JWT is required (the core cross-service proof)")
     # -----------------------------------------------------------------------
     # No token -> must be rejected
-    r = safe("post", f"{TODOS}/", json={"title": "should fail"})
-    check("create todo WITHOUT token is rejected (401)",
+    r = safe("post", f"{TASKS}/", json={"title": "should fail"})
+    check("create task WITHOUT token is rejected (401)",
           r is not None and r.status_code == 401,
           detail=f"got {r.status_code if r else 'no response'}")
 
     # With token -> created, scoped to this user
-    r = safe("post", f"{TODOS}/", headers=auth_header, json={"title": "first task"})
+    r = safe("post", f"{TASKS}/", headers=auth_header, json={"title": "first task"})
     ok = r is not None and r.status_code == 201
-    check("create todo WITH token returns 201", ok,
+    check("create task WITH token returns 201", ok,
           detail=f"got {r.status_code if r else 'no response'}: {r.text if r else ''}")
-    todo_id = r.json().get("id") if ok else None
+    task_id = r.json().get("id") if ok else None
 
-    # List -> should contain the todo we just made
-    r = safe("get", f"{TODOS}/", headers=auth_header)
+    if task_id:
+        r = safe("patch", f"{TASKS}/{task_id}/", headers=auth_header, json={"done": True})
+        check("complete task through done compatibility returns 200",
+              r is not None and r.status_code == 200 and r.json().get("done") is True,
+              detail=f"got {r.status_code if r else 'no response'}: {r.text if r else ''}")
+
+    # List -> should contain the task we just made
+    r = safe("get", f"{TASKS}/", headers=auth_header)
     titles = [t.get("title") for t in r.json()] if (r and r.status_code == 200) else []
-    check("list todos returns our task", "first task" in titles,
+    check("list tasks returns our task", "first task" in titles,
           detail=f"got {titles}")
 
     # -----------------------------------------------------------------------
-    section("4. TODOS — scoping: a second user can't see the first user's todos")
+    section("4. TASKS — scoping: a second user can't see the first user's tasks")
     # -----------------------------------------------------------------------
     bob = f"bob_{SUFFIX}"
     safe("post", f"{AUTH}/register/",
@@ -126,9 +132,9 @@ def main():
     r = safe("post", f"{AUTH}/login/", json={"username": bob, "password": PASSWORD})
     if r and r.status_code == 200:
         bob_header = {"Authorization": f"Bearer {r.json()['access']}"}
-        r = safe("get", f"{TODOS}/", headers=bob_header)
+        r = safe("get", f"{TASKS}/", headers=bob_header)
         bob_titles = [t.get("title") for t in r.json()] if (r and r.status_code == 200) else []
-        check("second user does NOT see first user's todos",
+        check("second user does NOT see first user's tasks",
               "first task" not in bob_titles,
               detail=f"bob saw {bob_titles}")
     else:

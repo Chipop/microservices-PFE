@@ -18,7 +18,7 @@ interface AccessTokenPayload {
 }
 
 /**
- * Stateless JWT guard — the equivalent of the legacy Django todo service's
+ * Stateless JWT guard — the equivalent of the legacy Django task/todo service's
  * StatelessJWTAuthentication: verify the HS256 token signed with the shared
  * JWT_SIGNING_KEY (issued by auth-service), trust the `user_id` claim, and do
  * NOT look up a user (this service has no users table). Attaches { userId } to

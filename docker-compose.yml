@@ -37,19 +37,19 @@ services:
       retries: 10
     networks: [todonet]
 
-  todos-db:
+  tasks-db:
     image: postgres:16-alpine
-    container_name: todos-db
+    container_name: tasks-db
     environment:
       - POSTGRES_USER=todo
       - POSTGRES_PASSWORD=todo
-      - POSTGRES_DB=todos
+      - POSTGRES_DB=tasks
     volumes:
-      - todos_pgdata:/var/lib/postgresql/data
+      - tasks_pgdata:/var/lib/postgresql/data
     ports:
       - "5435:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U todo -d todos"]
+      test: ["CMD-SHELL", "pg_isready -U todo -d tasks"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -66,6 +66,13 @@ services:
       - POSTGRES_DB=users
       - POSTGRES_USER=todo
       - POSTGRES_PASSWORD=todo
+      - PROFILE_STORAGE_BACKEND=azure
+      - AZURE_STORAGE_CONTAINER=flowforge-bucket
+      - AZURE_STORAGE_CONNECTION_STRING=${AZURE_STORAGE_CONNECTION_STRING}
+      - PROFILE_PICTURE_MAX_BYTES=2097152
+      - PROFILE_PICTURE_ALLOWED_CONTENT_TYPES=image/jpeg,image/png,image/webp
+      - PROFILE_PICTURE_SIGNED_URL_TTL_SECONDS=900
+      - PROFILE_PICTURE_KEY_PREFIX=profile-pictures
     volumes:
       - ./server/user-service:/app
     ports:
@@ -97,9 +104,8 @@ services:
         condition: service_healthy
     networks: [todonet]
 
-  # --- legacy-todo-service REPLACED by todo-service (kept here, commented, still works
-  #     if you ever swap back). The NestJS service below takes over host port
-  #     8003, so the gateway upstream contract is unchanged. ---
+  # --- legacy-todo-service is retired. The active task-service below owns host
+  #     port 8003 and the gateway routes /api/tasks to it. ---
   # legacy-todo-service:
   #   build: ./server/legacy-todo-service
   #   container_name: legacy-todo-service
@@ -112,27 +118,28 @@ services:
   #     - "8003:8000"
   #   networks: [todonet]
 
-  todo-service:
-    build: ./server/todo-service
-    container_name: todo-service
+  task-service:
+    build: ./server/task-service
+    container_name: task-service
     environment:
       # Same shared secret + HS256 + `user_id` claim as auth-service issues.
       - JWT_SIGNING_KEY=this-is-a-much-longer-shared-secret-key-32plus
       - PORT=8000
-      - POSTGRES_HOST=todos-db
+      - POSTGRES_HOST=tasks-db
       - POSTGRES_PORT=5432
-      - POSTGRES_DB=todos
+      - POSTGRES_DB=tasks
       - POSTGRES_USER=todo
       - POSTGRES_PASSWORD=todo
+      - TASK_SCHEMA_SYNC=true
     ports:
       - "8003:8000"
     depends_on:
-      todos-db:
+      tasks-db:
         condition: service_healthy
     networks: [todonet]
 
   # API Gateway — the single public entry point. Routes /api/auth, /api/profiles
-  # and /api/todos to the right service. Clients only need this one origin.
+  # and /api/tasks to the right service. Clients only need this one origin.
   api-gateway:
     image: nginx:alpine
     container_name: api-gateway
@@ -143,7 +150,7 @@ services:
     depends_on:
       - auth-service
       - user-service
-      - todo-service
+      - task-service
     networks: [todonet]
 
   frontend:
@@ -161,7 +168,7 @@ services:
 volumes:
   auth_pgdata:
   users_pgdata:
-  todos_pgdata:
+  tasks_pgdata:
 
 networks:
   todonet:

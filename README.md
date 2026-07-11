@@ -1,8 +1,8 @@
-# Todos — Microservices Platform
+# Tasks — Microservices Platform
 
-A small TODO application built to demonstrate a **microservices architecture**:
+A task management application built to demonstrate a **microservices architecture**:
 three independent services under `server/` — two in **Django** (auth, profiles) and one in
-**NestJS** (todos) — behind an **nginx API gateway**, **each with its own
+**NestJS** (tasks) — behind an **nginx API gateway**, **each with its own
 PostgreSQL database** (database-per-service), with a **Quasar (Vue 3)**
 single-page frontend.
 
@@ -13,12 +13,12 @@ single-page frontend.
                                          │ routes by URL prefix
          ┌───────────────────────────────┼───────────────────────────────┐
          ▼                               ▼                                ▼
-  /api/auth/  ───▶ auth-service    /api/profiles/ ─▶ user-service    /api/todos/ ─▶ todo-service
+  /api/auth/  ───▶ auth-service    /api/profiles/ ─▶ user-service    /api/tasks/ ─▶ task-service
    (8002, Django)                    (8001, Django)                   (8003, NestJS)
-   register / login / JWT            user profiles                    JWT-scoped CRUD
+   register / login / JWT            user profiles                    JWT-scoped tasks
          │                               │                                │
          ▼                               ▼                                ▼
-   auth-db  :5433                   users-db :5434                   todos-db :5432
+   auth-db  :5433                   users-db :5434                   tasks-db :5435
    (Postgres)                       (Postgres)                       (Postgres)
    one database per service — separate containers & volumes, share nothing
 
@@ -26,10 +26,9 @@ single-page frontend.
   Every service validates the same JWT, signed with one shared HS256 secret (`user_id` claim).
 ```
 
-> **Note:** `todos` was originally a Django service (`server/legacy-todo-service/`). It has been
-> **replaced by `server/todo-service/`**, which serves the exact same `/api/todos/` contract
-> on the same port (8003) and validates the same shared JWT. The Django version is
-> kept in the repo (commented out in `docker-compose.yml`) for reference.
+> **Note:** task management is now owned by `server/task-service/`. The former
+> Django todo implementation remains in `server/legacy-todo-service/` for
+> reference, but the active public contract is `/api/tasks/`.
 
 ---
 
@@ -39,10 +38,10 @@ single-page frontend.
 |-------|-------|
 | **Frontend** | Quasar 2 (Vue 3, `<script setup>`), TypeScript, Pinia (stores), Vue Router (file-based routing), Vite |
 | **Auth + Profiles services** | Django 5.2, Django REST Framework, `djangorestframework-simplejwt` (JWT auth) |
-| **Todos service** | NestJS 11 (TypeScript), TypeORM, `class-validator`, `@nestjs/jwt` (stateless HS256 verification) |
+| **Task service** | NestJS 11 (TypeScript), TypeORM, `class-validator`, `@nestjs/jwt` (stateless HS256 verification) |
 | **API Gateway** | nginx (alpine) — reverse proxy / single entry point |
 | **Auth** | JWT (HS256), one shared `JWT_SIGNING_KEY` across all services; identity in the `user_id` claim |
-| **Database** | PostgreSQL 16 — **one container per service** (`auth-db`, `users-db`, `todos-db`), each with its own volume; services share nothing |
+| **Database** | PostgreSQL 16 — **one container per service** (`auth-db`, `users-db`, `tasks-db`), each with its own volume; services share nothing |
 | **Runtime** | Docker + Docker Compose (one network, `todonet`) |
 | **Test** | `integration-tests/test_services.py` — cross-service end-to-end check (Python `requests`) |
 
@@ -55,7 +54,7 @@ The single public entry point. Routes incoming requests by URL prefix to the
 right service and passes CORS headers through. Clients only ever talk to `:8080`.
 - `/api/auth/` → auth-service
 - `/api/profiles/` → user-service
-- `/api/todos/` → todo-service
+- `/api/tasks/` → task-service
 
 ### `server/auth-service/` — Auth service (port 8002, Django)
 Owns user accounts and credentials. Issues JWTs. Persists to its own `auth-db` Postgres container.
@@ -75,30 +74,33 @@ storage backend.
 - `GET /api/profiles/public/{username}/` — public profile fields
 - `POST / PUT / DELETE /api/profiles/picture/` — upload, replace, or remove profile picture
 
-### `server/todo-service/` — Todo service (port 8003, NestJS)
-The actual TODO CRUD, and a **drop-in replacement** for the former Django todo service.
-Every todo is scoped to the `user_id` inside the JWT, so users only ever see
+### `server/task-service/` — Task service (port 8003, NestJS)
+Owns task CRUD plus task metadata such as statuses, priorities, deadlines,
+assignments, tags, subtasks, dependencies, recurrence configuration, reminders,
+Kanban columns, and saved filters. Every task is scoped to the `user_id` inside
+the JWT, so users only ever see
 their own (a cross-user id is a `404`). Auth is **stateless**: the service has no
 users table — it verifies the shared HS256 JWT and trusts the `user_id` claim.
-Persists to its own `todos-db` Postgres container via TypeORM.
-- `GET / POST /api/todos/`
-- `GET / PATCH / DELETE /api/todos/{id}/`
+Persists to its own `tasks-db` Postgres container via TypeORM.
+- `GET / POST /api/tasks/`
+- `GET / PATCH / DELETE /api/tasks/{id}/`
+- `POST /api/tasks/{id}/complete`
+- `POST /api/tasks/{id}/archive`
 
-  Todo shape: `{ id, title, done, created_at }` (`user_id` comes from the JWT,
-  never the client).
+  Task responses include `done` as a derived compatibility field, while the
+  service stores richer task state internally.
 
 ### `server/legacy-todo-service/` — Former Todo service (Django, retired)
 The original Django implementation, kept for reference. It is **commented out** in
-`docker-compose.yml`; `todo-service` now occupies port 8003 in its place.
+`docker-compose.yml`; `task-service` now occupies port 8003 in its place.
 
 ### `frontend/` — Quasar SPA
-Login, register, todos CRUD and profile pages. All API calls go through the
+Login, register, task CRUD and profile pages. All API calls go through the
 single gateway origin (`http://localhost:8080`). State lives in Pinia stores
-(`auth`, `todos`); a route guard protects authenticated pages. The frontend is
-unchanged by the todos swap — the `/api/todos/` contract is identical.
+(`auth`, `tasks`); a route guard protects authenticated pages.
 
 ### `integration-tests/test_services.py` — End-to-end test
-Walks the real cross-service flow (register → login → todos CRUD → profile
+Walks the real cross-service flow (register → login → tasks CRUD → profile
 scoping → internal-key guards) and prints PASS/FAIL per check.
 
 ---
@@ -123,10 +125,10 @@ migrating/starting:
 | `frontend` | http://localhost:9000 |
 | `auth-service` | http://localhost:8002 |
 | `user-service` | http://localhost:8001 |
-| `todo-service` | http://localhost:8003 |
+| `task-service` | http://localhost:8003 |
 | `auth-db` (PostgreSQL) | localhost:5433 (`todo` / `todo`) |
 | `users-db` (PostgreSQL) | localhost:5434 (`todo` / `todo`) |
-| `todos-db` (PostgreSQL) | localhost:5432 (`todo` / `todo`) |
+| `tasks-db` (PostgreSQL) | localhost:5435 (`todo` / `todo`) |
 
 > The gateway is the intended entry point. The individual `8001/8002/8003`
 > ports are still exposed for convenience and for `integration-tests/test_services.py`.
@@ -160,16 +162,16 @@ python integration-tests/test_services.py
 
 - All services share the same `JWT_SIGNING_KEY` and `INTERNAL_API_KEY`
   (set in `docker-compose.yml`) — these are **dev secrets**, change them for
-  any real deployment. `todo-service` reads `JWT_SIGNING_KEY` and verifies the
+  any real deployment. `task-service` reads `JWT_SIGNING_KEY` and verifies the
   token with HS256 — it must match the key `auth-service` signs with.
 - Persistence is **database-per-service**: each service has its own PostgreSQL
-  container (`auth-db`, `users-db`, `todos-db`) with its own Docker volume
-  (`auth_pgdata`, `users_pgdata`, `todos_pgdata`). Services share nothing at the
+  container (`auth-db`, `users-db`, `tasks-db`) with its own Docker volume
+  (`auth_pgdata`, `users_pgdata`, `tasks_pgdata`). Services share nothing at the
   data layer — they communicate only over HTTP. Each DB is created by its
   container's `POSTGRES_DB`.
-- `todo-service` runs TypeORM with `synchronize: true`, so its `todos` table is
-  created automatically on first boot — convenient for dev; switch to migrations
-  before production.
+- `task-service` runs TypeORM with `TASK_SCHEMA_SYNC=true` in local Compose so
+  task tables are created automatically on first boot. Set it to `false` and run
+  explicit migrations before production.
 - CORS is enabled for local development (Django middleware / NestJS `enableCors`).
   Restrict it to the frontend origin before deploying.
 - The Django services fall back to SQLite when `POSTGRES_HOST` is unset, so a

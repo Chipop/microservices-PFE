@@ -5,8 +5,8 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // The gateway forwards `/api/todos/...` unchanged, so the app serves under
-  // the same `/api` prefix the Django service used.
+  // The gateway forwards `/api/tasks/...` unchanged, so the app serves under
+  // the same `/api` prefix as the rest of the microservice platform.
   app.setGlobalPrefix('api');
 
   // The browser talks to the gateway cross-origin (Quasar dev server -> :8080),
