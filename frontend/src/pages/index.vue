@@ -6,7 +6,7 @@
 
         <q-toolbar-title class="row items-center no-wrap">
           <q-icon name="checklist" class="q-mr-sm" />
-          Todos
+          Tasks
         </q-toolbar-title>
 
         <q-chip v-if="auth.displayName" color="white" text-color="primary" icon="person">
@@ -22,14 +22,19 @@
       <q-list padding>
         <q-item-label header>Navigation</q-item-label>
 
-        <q-item clickable v-ripple to="/" exact active-class="text-primary bg-blue-1">
-          <q-item-section avatar><q-icon name="list_alt" /></q-item-section>
-          <q-item-section>My Todos</q-item-section>
+          <q-item clickable v-ripple to="/" exact active-class="text-primary bg-blue-1">
+            <q-item-section avatar><q-icon name="list_alt" /></q-item-section>
+          <q-item-section>My Tasks</q-item-section>
         </q-item>
 
         <q-item clickable v-ripple to="/profile" active-class="text-primary bg-blue-1">
           <q-item-section avatar><q-icon name="account_circle" /></q-item-section>
           <q-item-section>Profile</q-item-section>
+        </q-item>
+
+        <q-item clickable v-ripple to="/security" active-class="text-primary bg-blue-1">
+          <q-item-section avatar><q-icon name="shield" /></q-item-section>
+          <q-item-section>Security</q-item-section>
         </q-item>
 
         <q-separator class="q-my-md" />
@@ -51,11 +56,11 @@
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
-import { useTodosStore } from '@/stores/todos';
+import { useTasksStore } from '@/stores/tasks';
 
 const router = useRouter();
 const auth = useAuthStore();
-const todos = useTodosStore();
+const tasks = useTasksStore();
 
 const leftDrawerOpen = ref(false);
 function toggleLeftDrawer() {
@@ -70,8 +75,8 @@ onMounted(() => {
 });
 
 async function onLogout() {
-  auth.logout();
-  todos.reset();
+  await auth.logoutRemote();
+  tasks.reset();
   await router.replace('/login');
 }
 </script>

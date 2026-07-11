@@ -6,7 +6,7 @@
           <q-card-section class="text-center q-pb-none">
             <q-icon name="person_add" size="48px" color="primary" />
             <div class="text-h5 q-mt-sm">Create account</div>
-            <div class="text-caption text-grey-7">Todos microservice platform</div>
+            <div class="text-caption text-grey-7">Task microservice platform</div>
           </q-card-section>
 
           <q-card-section>

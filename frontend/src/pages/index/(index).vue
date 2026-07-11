@@ -3,9 +3,9 @@
     <div class="page-wrap">
       <div class="row items-center justify-between q-mb-md">
         <div>
-          <div class="text-h5">My Todos</div>
+          <div class="text-h5">My Tasks</div>
           <div class="text-caption text-grey-7">
-            {{ todos.remaining }} open · {{ todos.total }} total
+            {{ tasks.remaining }} open · {{ tasks.total }} total
           </div>
         </div>
         <q-btn
@@ -13,7 +13,7 @@
           round
           icon="refresh"
           color="primary"
-          :loading="todos.loading"
+          :loading="tasks.loading"
           aria-label="Refresh"
           @click="refresh"
         >
@@ -21,7 +21,7 @@
         </q-btn>
       </div>
 
-      <!-- Add a todo -->
+      <!-- Add a task -->
       <q-card flat bordered class="q-mb-md">
         <q-card-section>
           <q-form @submit.prevent="onAdd" class="row q-col-gutter-sm items-start">
@@ -54,26 +54,26 @@
 
       <!-- List -->
       <q-card flat bordered>
-        <q-inner-loading :showing="todos.loading && !todos.items.length" />
+        <q-inner-loading :showing="tasks.loading && !tasks.items.length" />
 
         <q-list separator>
-          <q-item v-for="todo in todos.items" :key="todo.id">
+          <q-item v-for="task in tasks.items" :key="task.id">
             <q-item-section side top>
               <q-checkbox
-                :model-value="todo.done"
+                :model-value="task.done"
                 color="primary"
-                @update:model-value="onToggle(todo)"
+                @update:model-value="onToggle(task)"
               />
             </q-item-section>
 
             <q-item-section>
               <q-item-label
-                :class="todo.done ? 'text-strike text-grey-6' : ''"
+                :class="task.done ? 'text-strike text-grey-6' : ''"
               >
-                {{ todo.title }}
+                {{ task.title }}
               </q-item-label>
               <q-item-label caption>
-                {{ formatDate(todo.created_at) }}
+                {{ task.status?.name ?? 'Todo' }} · {{ task.priority }} · {{ formatDate(task.created_at) }}
               </q-item-label>
             </q-item-section>
 
@@ -86,7 +86,16 @@
                   icon="edit"
                   color="grey-7"
                   aria-label="Edit"
-                  @click="onRename(todo)"
+                  @click="onRename(task)"
+                />
+                <q-btn
+                  flat
+                  round
+                  dense
+                  icon="archive"
+                  color="grey-7"
+                  aria-label="Archive"
+                  @click="onArchive(task)"
                 />
                 <q-btn
                   flat
@@ -95,7 +104,7 @@
                   icon="delete"
                   color="negative"
                   aria-label="Delete"
-                  @click="onDelete(todo)"
+                  @click="onDelete(task)"
                 />
               </div>
             </q-item-section>
@@ -103,11 +112,11 @@
         </q-list>
 
         <div
-          v-if="!todos.loading && !todos.items.length"
+          v-if="!tasks.loading && !tasks.items.length"
           class="column flex-center text-grey-6 q-pa-xl"
         >
           <q-icon name="inbox" size="48px" />
-          <div class="q-mt-sm">No todos yet — add your first one above.</div>
+          <div class="q-mt-sm">No tasks yet — add your first one above.</div>
         </div>
       </q-card>
     </div>
@@ -117,11 +126,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useQuasar } from 'quasar';
-import { useTodosStore } from '@/stores/todos';
-import type { Todo } from '@/services/api';
+import { useTasksStore } from '@/stores/tasks';
+import type { Task } from '@/services/api';
 
 const $q = useQuasar();
-const todos = useTodosStore();
+const tasks = useTasksStore();
 
 const newTitle = ref('');
 const adding = ref(false);
@@ -130,9 +139,9 @@ onMounted(refresh);
 
 async function refresh() {
   try {
-    await todos.fetch();
+    await tasks.fetch();
   } catch (err) {
-    notifyError(err, 'Could not load todos');
+    notifyError(err, 'Could not load tasks');
   }
 }
 
@@ -141,53 +150,64 @@ async function onAdd() {
   if (!title) return;
   adding.value = true;
   try {
-    await todos.add(title);
+    await tasks.add(title);
     newTitle.value = '';
   } catch (err) {
-    notifyError(err, 'Could not add todo');
+    notifyError(err, 'Could not add task');
   } finally {
     adding.value = false;
   }
 }
 
-async function onToggle(todo: Todo) {
+async function onToggle(task: Task) {
   try {
-    await todos.toggle(todo);
+    await tasks.toggle(task);
   } catch (err) {
-    notifyError(err, 'Could not update todo');
+    notifyError(err, 'Could not update task');
   }
 }
 
-function onRename(todo: Todo) {
+function onRename(task: Task) {
   $q.dialog({
-    title: 'Rename todo',
-    prompt: { model: todo.title, type: 'text', isValid: (v: string) => v.trim().length > 0 },
+    title: 'Rename task',
+    prompt: { model: task.title, type: 'text', isValid: (v: string) => v.trim().length > 0 },
     cancel: true,
     persistent: false,
   }).onOk((value: string) => {
     void (async () => {
       try {
-        await todos.rename(todo, value.trim());
+        await tasks.rename(task, value.trim());
       } catch (err) {
-        notifyError(err, 'Could not rename todo');
+        notifyError(err, 'Could not rename task');
       }
     })();
   });
 }
 
-function onDelete(todo: Todo) {
+function onArchive(task: Task) {
+  void (async () => {
+    try {
+      await tasks.archive(task);
+      $q.notify({ type: 'positive', message: 'Task archived' });
+    } catch (err) {
+      notifyError(err, 'Could not archive task');
+    }
+  })();
+}
+
+function onDelete(task: Task) {
   $q.dialog({
-    title: 'Delete todo',
-    message: `Delete "${todo.title}"?`,
+    title: 'Delete task',
+    message: `Delete "${task.title}"?`,
     cancel: true,
     ok: { label: 'Delete', color: 'negative' },
   }).onOk(() => {
     void (async () => {
       try {
-        await todos.remove(todo.id);
-        $q.notify({ type: 'positive', message: 'Todo deleted' });
+        await tasks.remove(task.id);
+        $q.notify({ type: 'positive', message: 'Task deleted' });
       } catch (err) {
-        notifyError(err, 'Could not delete todo');
+        notifyError(err, 'Could not delete task');
       }
     })();
   });

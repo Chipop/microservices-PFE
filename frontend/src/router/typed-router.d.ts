@@ -38,6 +38,7 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | '//(index)'
       | '//profile'
+      | '//security'
     >,
     '//(index)': RouteRecordInfo<
       '//(index)',
@@ -53,11 +54,25 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '//security': RouteRecordInfo<
+      '//security',
+      '/security',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
     '/[...path]': RouteRecordInfo<
       '/[...path]',
       '/:path(.*)',
       { path: ParamValue<true> },
       { path: ParamValue<false> },
+      | never
+    >,
+    '/forgot-password': RouteRecordInfo<
+      '/forgot-password',
+      '/forgot-password',
+      Record<never, never>,
+      Record<never, never>,
       | never
     >,
     '/login': RouteRecordInfo<
@@ -67,9 +82,30 @@ declare module 'vue-router/auto-routes' {
       Record<never, never>,
       | never
     >,
+    '/public/[username]': RouteRecordInfo<
+      '/public/[username]',
+      '/public/:username',
+      { username: ParamValue<true> },
+      { username: ParamValue<false> },
+      | never
+    >,
     '/register': RouteRecordInfo<
       '/register',
       '/register',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/reset-password': RouteRecordInfo<
+      '/reset-password',
+      '/reset-password',
+      Record<never, never>,
+      Record<never, never>,
+      | never
+    >,
+    '/verify-token': RouteRecordInfo<
+      '/verify-token',
+      '/verify-token',
       Record<never, never>,
       Record<never, never>,
       | never
@@ -92,6 +128,7 @@ declare module 'vue-router/auto-routes' {
         | '/'
         | '//(index)'
         | '//profile'
+        | '//security'
       views:
         | 'default'
       pathParamNames:
@@ -113,6 +150,14 @@ declare module 'vue-router/auto-routes' {
       pathParamNames:
         | never
     }
+    'src/pages/index/security.vue': {
+      routes:
+        | '//security'
+      views:
+        | never
+      pathParamNames:
+        | never
+    }
     'src/pages/[...path].vue': {
       routes:
         | '/[...path]'
@@ -120,6 +165,14 @@ declare module 'vue-router/auto-routes' {
         | never
       pathParamNames:
         | 'path'
+    }
+    'src/pages/forgot-password.vue': {
+      routes:
+        | '/forgot-password'
+      views:
+        | never
+      pathParamNames:
+        | never
     }
     'src/pages/login.vue': {
       routes:
@@ -129,9 +182,33 @@ declare module 'vue-router/auto-routes' {
       pathParamNames:
         | never
     }
+    'src/pages/public/[username].vue': {
+      routes:
+        | '/public/[username]'
+      views:
+        | never
+      pathParamNames:
+        | 'username'
+    }
     'src/pages/register.vue': {
       routes:
         | '/register'
+      views:
+        | never
+      pathParamNames:
+        | never
+    }
+    'src/pages/reset-password.vue': {
+      routes:
+        | '/reset-password'
+      views:
+        | never
+      pathParamNames:
+        | never
+    }
+    'src/pages/verify-token.vue': {
+      routes:
+        | '/verify-token'
       views:
         | never
       pathParamNames:

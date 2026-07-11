@@ -9,7 +9,14 @@ import {
 import { useAuthStore } from '@/stores/auth';
 
 // Routes an unauthenticated visitor is allowed to reach.
-const PUBLIC_ROUTES = new Set(['/login', '/register']);
+const PUBLIC_ROUTES = new Set([
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+  '/verify-token',
+]);
+const AUTH_ENTRY_ROUTES = new Set(['/login', '/register']);
 
 /*
  * If not building with SSR mode, you can
@@ -40,12 +47,12 @@ export default defineRouter(({ store }) => {
   // Auth guard: everything except /login and /register requires a token.
   Router.beforeEach((to) => {
     const auth = useAuthStore(store);
-    const isPublic = PUBLIC_ROUTES.has(to.path);
+    const isPublic = PUBLIC_ROUTES.has(to.path) || to.path.startsWith('/public/');
 
     if (!auth.isSignedIn && !isPublic) {
       return { path: '/login', query: { next: to.fullPath } };
     }
-    if (auth.isSignedIn && isPublic) {
+    if (auth.isSignedIn && AUTH_ENTRY_ROUTES.has(to.path)) {
       return { path: '/' };
     }
     return true;
