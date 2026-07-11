@@ -1,8 +1,8 @@
 # Tasks — Microservices Platform
 
 A task management application built to demonstrate a **microservices architecture**:
-four independent services under `server/` — two in **Django** (auth, profiles),
-one in **NestJS** (tasks), and one in **Spring Boot** (workspaces) — behind an
+five independent services under `server/` — two in **Django** (auth, profiles),
+one in **NestJS** (tasks), and two in **Spring Boot** (workspaces, attachments) — behind an
 **nginx API gateway**, **each with its own
 PostgreSQL database** (database-per-service), with a **Quasar (Vue 3)**
 single-page frontend.
@@ -12,15 +12,15 @@ single-page frontend.
    Browser (SPA :9000) ──▶│   API Gateway — nginx :8080   │
                           └──────────────┬───────────────┘
                                          │ routes by URL prefix
-         ┌──────────────────────┬──────────────────────┬──────────────────────┐
-         ▼                      ▼                      ▼                      ▼
-  /api/auth/              /api/profiles/          /api/tasks/           /api/workspaces/
-  auth-service            user-service            task-service          workspace-service
-  (8002, Django)          (8001, Django)          (8003, NestJS)        (8004, Spring Boot)
-  register / login / JWT  user profiles           JWT-scoped tasks      memberships
-         │                      │                      │                      │
-         ▼                      ▼                      ▼                      ▼
-   auth-db  :5433          users-db :5434          tasks-db :5435       workspaces-db :5436
+         ┌──────────────────────┬──────────────────────┬──────────────────────┬──────────────────────┐
+         ▼                      ▼                      ▼                      ▼                      ▼
+  /api/auth/              /api/profiles/          /api/tasks/           /api/workspaces/      /api/attachments/
+  auth-service            user-service            task-service          workspace-service     attachment-service
+  (8002, Django)          (8001, Django)          (8003, NestJS)        (8004, Spring Boot)   (8005, Spring Boot)
+  register / login / JWT  user profiles           JWT-scoped tasks      memberships           task files
+         │                      │                      │                      │                      │
+         ▼                      ▼                      ▼                      ▼                      ▼
+   auth-db  :5433          users-db :5434          tasks-db :5435       workspaces-db :5436   attachments-db :5437
    (Postgres)                       (Postgres)                       (Postgres)
    one database per service — separate containers & volumes, share nothing
 
@@ -42,6 +42,7 @@ single-page frontend.
 | **Auth + Profiles services** | Django 5.2, Django REST Framework, `djangorestframework-simplejwt` (JWT auth) |
 | **Task service** | NestJS 11 (TypeScript), TypeORM, `class-validator`, `@nestjs/jwt` (stateless HS256 verification) |
 | **Workspace service** | Spring Boot 3, Maven, Java 21, Spring Security resource server, Spring Data JPA, Flyway |
+| **Attachment service** | Spring Boot 3, Maven, Java 21, Spring Security resource server, Spring Data JPA, Flyway, Azure Blob Storage SDK |
 | **API Gateway** | nginx (alpine) — reverse proxy / single entry point |
 | **Auth** | JWT (HS256), one shared `JWT_SIGNING_KEY` across all services; identity in the `user_id` claim |
 | **Database** | PostgreSQL 16 — **one container per service** (`auth-db`, `users-db`, `tasks-db`, `workspaces-db`), each with its own volume; services share nothing |
@@ -59,6 +60,7 @@ right service and passes CORS headers through. Clients only ever talk to `:8080`
 - `/api/profiles/` → user-service
 - `/api/tasks/` → task-service
 - `/api/workspaces/` → workspace-service
+- `/api/attachments/` → attachment-service
 
 ### `server/auth-service/` — Auth service (port 8002, Django)
 Owns user accounts and credentials. Issues JWTs. Persists to its own `auth-db` Postgres container.
@@ -105,6 +107,17 @@ Flyway.
 - `GET / POST /api/workspaces/{id}/invitations`
 - `POST /api/workspaces/invitations/{token}/accept`
 
+### `server/attachment-service/` — Attachment service (port 8005, Spring Boot)
+Owns attachment metadata and Azure Blob Storage integration for task files. It
+validates the shared JWT, checks task visibility by calling `task-service` with
+the caller's bearer token, stores metadata in its own `attachments-db`, and
+keeps file bytes in the configured private Azure Blob container.
+- `POST /api/attachments/tasks/{taskId}` — upload a file to a visible task
+- `GET /api/attachments/tasks/{taskId}` — list task attachments
+- `GET /api/attachments/{attachmentId}` — read attachment metadata
+- `POST /api/attachments/{attachmentId}/download-link` — generate a signed download URL
+- `DELETE /api/attachments/{attachmentId}` — delete an attachment uploaded by the caller
+
 ### `server/legacy-todo-service/` — Former Todo service (Django, retired)
 The original Django implementation, kept for reference. It is **commented out** in
 `docker-compose.yml`; `task-service` now occupies port 8003 in its place.
@@ -142,10 +155,12 @@ migrating/starting:
 | `user-service` | http://localhost:8001 |
 | `task-service` | http://localhost:8003 |
 | `workspace-service` | http://localhost:8004 |
+| `attachment-service` | http://localhost:8005 |
 | `auth-db` (PostgreSQL) | localhost:5433 (`todo` / `todo`) |
 | `users-db` (PostgreSQL) | localhost:5434 (`todo` / `todo`) |
 | `tasks-db` (PostgreSQL) | localhost:5435 (`todo` / `todo`) |
 | `workspaces-db` (PostgreSQL) | localhost:5436 (`todo` / `todo`) |
+| `attachments-db` (PostgreSQL) | localhost:5437 (`todo` / `todo`) |
 
 > The gateway is the intended entry point. The individual `8001/8002/8003`
 > ports are still exposed for convenience and for `integration-tests/test_services.py`.
@@ -182,14 +197,17 @@ python integration-tests/test_services.py
   any real deployment. `task-service` reads `JWT_SIGNING_KEY` and verifies the
   token with HS256 — it must match the key `auth-service` signs with.
 - Persistence is **database-per-service**: each service has its own PostgreSQL
-  container (`auth-db`, `users-db`, `tasks-db`, `workspaces-db`) with its own Docker volume
-  (`auth_pgdata`, `users_pgdata`, `tasks_pgdata`, `workspaces_pgdata`). Services share nothing at the
+  container (`auth-db`, `users-db`, `tasks-db`, `workspaces-db`, `attachments-db`) with its own Docker volume
+  (`auth_pgdata`, `users_pgdata`, `tasks_pgdata`, `workspaces_pgdata`, `attachments_pgdata`). Services share nothing at the
   data layer — they communicate only over HTTP. Each DB is created by its
   container's `POSTGRES_DB`.
 - `task-service` runs TypeORM with `TASK_SCHEMA_SYNC=true` in local Compose so
   task tables are created automatically on first boot. Set it to `false` and run
   explicit migrations before production.
 - `workspace-service` uses Flyway migrations and Hibernate schema validation.
+- `attachment-service` uses Flyway migrations and Hibernate schema validation.
+  It stores file metadata in Postgres and file bytes in the private Azure Blob
+  container configured by `AZURE_STORAGE_CONTAINER` and Azure storage credentials.
 - CORS is enabled for local development (Django middleware / NestJS `enableCors`).
   Restrict it to the frontend origin before deploying.
 - The Django services fall back to SQLite when `POSTGRES_HOST` is unset, so a
