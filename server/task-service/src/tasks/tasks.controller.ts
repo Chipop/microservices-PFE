@@ -19,6 +19,7 @@ import {
   AddDependencyDto,
   AddTagDto,
   AssignTaskDto,
+  CreateCommentDto,
   CreateKanbanColumnDto,
   CreateReminderDto,
   CreateSavedFilterDto,
@@ -27,6 +28,7 @@ import {
   CreateTaskDto,
   ListTasksQueryDto,
   UpdateKanbanColumnDto,
+  UpdateCommentDto,
   UpdateSavedFilterDto,
   UpdateStatusDto,
   UpdateSubtaskDto,
@@ -42,12 +44,12 @@ export class TasksController {
 
   @Get()
   findAll(@CurrentUser() user: AuthUser, @Query() query: ListTasksQueryDto) {
-    return this.tasksService.findAll(user.userId, query);
+    return this.tasksService.findAll(user, query);
   }
 
   @Post()
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateTaskDto) {
-    return this.tasksService.create(user.userId, dto);
+    return this.tasksService.create(user, dto);
   }
 
   @Get('statuses')
@@ -139,7 +141,12 @@ export class TasksController {
 
   @Get(':id')
   findOne(@CurrentUser() user: AuthUser, @Param('id', ParseIntPipe) id: number) {
-    return this.tasksService.findOne(user.userId, id);
+    return this.tasksService.findOne(user, id);
+  }
+
+  @Get(':id/permissions')
+  permissions(@CurrentUser() user: AuthUser, @Param('id', ParseIntPipe) id: number) {
+    return this.tasksService.taskPermission(user, id);
   }
 
   @Patch(':id')
@@ -148,23 +155,23 @@ export class TasksController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateTaskDto,
   ) {
-    return this.tasksService.update(user.userId, id, dto);
+    return this.tasksService.update(user, id, dto);
   }
 
   @Delete(':id')
   @HttpCode(204)
   remove(@CurrentUser() user: AuthUser, @Param('id', ParseIntPipe) id: number) {
-    return this.tasksService.remove(user.userId, id);
+    return this.tasksService.remove(user, id);
   }
 
   @Post(':id/complete')
   complete(@CurrentUser() user: AuthUser, @Param('id', ParseIntPipe) id: number) {
-    return this.tasksService.complete(user.userId, id);
+    return this.tasksService.complete(user, id);
   }
 
   @Post(':id/archive')
   archive(@CurrentUser() user: AuthUser, @Param('id', ParseIntPipe) id: number) {
-    return this.tasksService.archive(user.userId, id);
+    return this.tasksService.archive(user, id);
   }
 
   @Post(':id/assignments')
@@ -173,7 +180,7 @@ export class TasksController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: AssignTaskDto,
   ) {
-    return this.tasksService.addAssignment(user.userId, id, dto);
+    return this.tasksService.addAssignment(user, id, dto);
   }
 
   @Delete(':id/assignments/:assigneeUserId')
@@ -183,7 +190,7 @@ export class TasksController {
     @Param('id', ParseIntPipe) id: number,
     @Param('assigneeUserId', ParseIntPipe) assigneeUserId: number,
   ) {
-    return this.tasksService.removeAssignment(user.userId, id, assigneeUserId);
+    return this.tasksService.removeAssignment(user, id, assigneeUserId);
   }
 
   @Post(':id/tags')
@@ -192,7 +199,7 @@ export class TasksController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: AddTagDto,
   ) {
-    return this.tasksService.addTag(user.userId, id, dto);
+    return this.tasksService.addTag(user, id, dto);
   }
 
   @Delete(':id/tags/:tagId')
@@ -202,7 +209,7 @@ export class TasksController {
     @Param('id', ParseIntPipe) id: number,
     @Param('tagId', ParseIntPipe) tagId: number,
   ) {
-    return this.tasksService.removeTag(user.userId, id, tagId);
+    return this.tasksService.removeTag(user, id, tagId);
   }
 
   @Post(':id/subtasks')
@@ -211,7 +218,7 @@ export class TasksController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CreateSubtaskDto,
   ) {
-    return this.tasksService.createSubtask(user.userId, id, dto);
+    return this.tasksService.createSubtask(user, id, dto);
   }
 
   @Patch(':id/subtasks/:subtaskId')
@@ -221,7 +228,7 @@ export class TasksController {
     @Param('subtaskId', ParseIntPipe) subtaskId: number,
     @Body() dto: UpdateSubtaskDto,
   ) {
-    return this.tasksService.updateSubtask(user.userId, id, subtaskId, dto);
+    return this.tasksService.updateSubtask(user, id, subtaskId, dto);
   }
 
   @Delete(':id/subtasks/:subtaskId')
@@ -231,7 +238,7 @@ export class TasksController {
     @Param('id', ParseIntPipe) id: number,
     @Param('subtaskId', ParseIntPipe) subtaskId: number,
   ) {
-    return this.tasksService.removeSubtask(user.userId, id, subtaskId);
+    return this.tasksService.removeSubtask(user, id, subtaskId);
   }
 
   @Post(':id/dependencies')
@@ -240,7 +247,7 @@ export class TasksController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: AddDependencyDto,
   ) {
-    return this.tasksService.addDependency(user.userId, id, dto);
+    return this.tasksService.addDependency(user, id, dto);
   }
 
   @Delete(':id/dependencies/:dependencyId')
@@ -250,7 +257,7 @@ export class TasksController {
     @Param('id', ParseIntPipe) id: number,
     @Param('dependencyId', ParseIntPipe) dependencyId: number,
   ) {
-    return this.tasksService.removeDependency(user.userId, id, dependencyId);
+    return this.tasksService.removeDependency(user, id, dependencyId);
   }
 
   @Put(':id/recurrence')
@@ -259,7 +266,7 @@ export class TasksController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpsertRecurrenceDto,
   ) {
-    return this.tasksService.upsertRecurrence(user.userId, id, dto);
+    return this.tasksService.upsertRecurrence(user, id, dto);
   }
 
   @Post(':id/reminders')
@@ -268,7 +275,7 @@ export class TasksController {
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CreateReminderDto,
   ) {
-    return this.tasksService.createReminder(user.userId, id, dto);
+    return this.tasksService.createReminder(user, id, dto);
   }
 
   @Delete(':id/reminders/:reminderId')
@@ -278,6 +285,49 @@ export class TasksController {
     @Param('id', ParseIntPipe) id: number,
     @Param('reminderId', ParseIntPipe) reminderId: number,
   ) {
-    return this.tasksService.removeReminder(user.userId, id, reminderId);
+    return this.tasksService.removeReminder(user, id, reminderId);
+  }
+
+  @Get(':id/comments')
+  listComments(@CurrentUser() user: AuthUser, @Param('id', ParseIntPipe) id: number) {
+    return this.tasksService.listComments(user, id);
+  }
+
+  @Post(':id/comments')
+  createComment(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CreateCommentDto,
+  ) {
+    return this.tasksService.createComment(user, id, dto);
+  }
+
+  @Patch(':id/comments/:commentId')
+  updateComment(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('commentId', ParseIntPipe) commentId: number,
+    @Body() dto: UpdateCommentDto,
+  ) {
+    return this.tasksService.updateComment(user, id, commentId, dto);
+  }
+
+  @Delete(':id/comments/:commentId')
+  @HttpCode(204)
+  removeComment(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('commentId', ParseIntPipe) commentId: number,
+  ) {
+    return this.tasksService.removeComment(user, id, commentId);
+  }
+
+  @Get(':id/comments/:commentId/permissions')
+  commentPermissions(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseIntPipe) id: number,
+    @Param('commentId', ParseIntPipe) commentId: number,
+  ) {
+    return this.tasksService.commentPermission(user, id, commentId);
   }
 }

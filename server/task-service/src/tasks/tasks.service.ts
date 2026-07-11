@@ -1,15 +1,18 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, IsNull, Repository } from 'typeorm';
+import { FindOptionsWhere, In, IsNull, Repository } from 'typeorm';
 import {
   AddDependencyDto,
   AddTagDto,
   AssignTaskDto,
+  CreateCommentDto,
   CreateKanbanColumnDto,
   CreateReminderDto,
   CreateSavedFilterDto,
@@ -18,6 +21,7 @@ import {
   CreateTaskDto,
   ListTasksQueryDto,
   UpdateKanbanColumnDto,
+  UpdateCommentDto,
   UpdateSavedFilterDto,
   UpdateStatusDto,
   UpdateSubtaskDto,
@@ -31,6 +35,7 @@ import {
   Tag,
   Task,
   TaskAssignment,
+  TaskComment,
   TaskDependency,
   TaskPriority,
   TaskRecurrence,
@@ -54,6 +59,8 @@ const DEFAULT_COLUMNS = [
 
 export interface TaskResponse {
   id: number;
+  workspace_id: number | null;
+  author_user_id: number;
   title: string;
   description: string;
   done: boolean;
@@ -61,6 +68,7 @@ export interface TaskResponse {
   due_at: Date | null;
   completed_at: Date | null;
   archived_at: Date | null;
+  deleted_at: Date | null;
   created_at: Date;
   updated_at: Date;
   status: { id: number; name: string; slug: string } | null;
@@ -72,11 +80,37 @@ export interface TaskResponse {
   reminders: Array<{ id: number; remind_at: Date; status: string; sent_at: Date | null }>;
 }
 
+export interface TaskCommentResponse {
+  id: number;
+  task_id: number;
+  author_user_id: number;
+  body: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+interface WorkspacePermission {
+  workspaceId: number;
+  visibility: 'PRIVATE' | 'PUBLIC';
+  isMember: boolean;
+  role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER' | null;
+  canView: boolean;
+  canContribute: boolean;
+  canAdmin: boolean;
+}
+
+interface WorkspaceSummary {
+  id: number;
+  workspaceType?: 'PERSONAL' | 'TEAM';
+}
+
 @Injectable()
 export class TasksService {
   constructor(
     @InjectRepository(Task)
     private readonly tasks: Repository<Task>,
+    @InjectRepository(TaskComment)
+    private readonly comments: Repository<TaskComment>,
     @InjectRepository(TaskStatus)
     private readonly statuses: Repository<TaskStatus>,
     @InjectRepository(KanbanColumn)
@@ -97,14 +131,30 @@ export class TasksService {
     private readonly reminders: Repository<TaskReminder>,
     @InjectRepository(SavedFilter)
     private readonly savedFilters: Repository<SavedFilter>,
+    private readonly config: ConfigService,
   ) {}
 
-  async findAll(userId: number, query: ListTasksQueryDto): Promise<TaskResponse[]> {
+  async findAll(user: { userId: number; token: string }, query: ListTasksQueryDto): Promise<TaskResponse[]> {
+    const userId = user.userId;
     await this.ensureDefaults(userId);
-    const where: FindOptionsWhere<Task> = { owner_user_id: userId };
-    if (!query.include_archived) where.archived_at = IsNull();
-    if (query.status_id) where.status_id = query.status_id;
-    if (query.priority) where.priority = query.priority;
+    let where: FindOptionsWhere<Task>[] | FindOptionsWhere<Task>;
+    if (query.workspace_id) {
+      await this.requireWorkspacePermission(user, query.workspace_id, 'view');
+      where = { workspace_id: query.workspace_id, deleted_at: IsNull() };
+    } else {
+      const visibleWorkspaceIds = await this.visibleWorkspaceIds(user);
+      where = [
+        { workspace_id: In(visibleWorkspaceIds), deleted_at: IsNull() },
+        { workspace_id: IsNull(), owner_user_id: userId, deleted_at: IsNull() },
+      ];
+    }
+    const applyFilters = (item: FindOptionsWhere<Task>) => {
+      if (!query.include_archived) item.archived_at = IsNull();
+      if (query.status_id) item.status_id = query.status_id;
+      if (query.priority) item.priority = query.priority;
+      return item;
+    };
+    where = Array.isArray(where) ? where.map(applyFilters) : applyFilters(where);
 
     const rows = await this.tasks.find({
       where,
@@ -114,8 +164,11 @@ export class TasksService {
     return rows.map((task) => this.toResponse(task));
   }
 
-  async create(userId: number, dto: CreateTaskDto): Promise<TaskResponse> {
+  async create(user: { userId: number; token: string }, dto: CreateTaskDto): Promise<TaskResponse> {
+    const userId = user.userId;
     await this.ensureDefaults(userId);
+    const workspaceId = dto.workspace_id ?? (await this.personalWorkspaceId(user));
+    await this.requireWorkspacePermission(user, workspaceId, 'contribute');
     const status = dto.status_id
       ? await this.getOwnedStatus(userId, dto.status_id)
       : await this.getStatusBySlug(userId, dto.done ? 'done' : 'todo');
@@ -125,6 +178,8 @@ export class TasksService {
 
     const task = this.tasks.create({
       owner_user_id: userId,
+      author_user_id: userId,
+      workspace_id: workspaceId,
       title: dto.title,
       description: dto.description ?? '',
       status_id: status.id,
@@ -134,15 +189,16 @@ export class TasksService {
       archived_at: status.slug === 'archived' ? new Date() : null,
       kanban_column_id: column?.id ?? null,
     });
-    return this.findOne(userId, (await this.tasks.save(task)).id);
+    return this.findOne(user, (await this.tasks.save(task)).id);
   }
 
-  async findOne(userId: number, id: number): Promise<TaskResponse> {
-    return this.toResponse(await this.getOwnedTask(userId, id));
+  async findOne(user: { userId: number; token: string }, id: number): Promise<TaskResponse> {
+    return this.toResponse(await this.getVisibleTask(user, id));
   }
 
-  async update(userId: number, id: number, dto: UpdateTaskDto): Promise<TaskResponse> {
-    const task = await this.getOwnedTask(userId, id);
+  async update(user: { userId: number; token: string }, id: number, dto: UpdateTaskDto): Promise<TaskResponse> {
+    const userId = user.userId;
+    const task = await this.getContributableTask(user, id);
 
     if (dto.title !== undefined) task.title = dto.title;
     if (dto.description !== undefined) task.description = dto.description;
@@ -166,34 +222,37 @@ export class TasksService {
     }
 
     await this.tasks.save(task);
-    return this.findOne(userId, id);
+    return this.findOne(user, id);
   }
 
-  async remove(userId: number, id: number): Promise<void> {
-    const task = await this.getOwnedTask(userId, id);
-    await this.tasks.remove(task);
+  async remove(user: { userId: number; token: string }, id: number): Promise<void> {
+    const task = await this.getVisibleTask(user, id);
+    await this.requireDeletePermission(user, task.author_user_id ?? task.owner_user_id, task.workspace_id);
+    task.deleted_at = new Date();
+    task.deleted_by_user_id = user.userId;
+    await this.tasks.save(task);
   }
 
-  async complete(userId: number, id: number): Promise<TaskResponse> {
-    return this.update(userId, id, { done: true });
+  async complete(user: { userId: number; token: string }, id: number): Promise<TaskResponse> {
+    return this.update(user, id, { done: true });
   }
 
-  async archive(userId: number, id: number): Promise<TaskResponse> {
-    const status = await this.getStatusBySlug(userId, 'archived');
-    const task = await this.getOwnedTask(userId, id);
+  async archive(user: { userId: number; token: string }, id: number): Promise<TaskResponse> {
+    const status = await this.getStatusBySlug(user.userId, 'archived');
+    const task = await this.getContributableTask(user, id);
     task.status_id = status.id;
     task.archived_at = task.archived_at ?? new Date();
     await this.tasks.save(task);
-    return this.findOne(userId, id);
+    return this.findOne(user, id);
   }
 
-  async addAssignment(userId: number, taskId: number, dto: AssignTaskDto) {
-    await this.getOwnedTask(userId, taskId);
+  async addAssignment(user: { userId: number; token: string }, taskId: number, dto: AssignTaskDto) {
+    await this.getContributableTask(user, taskId);
     if (dto.assignee_user_id <= 0) throw new BadRequestException('Assignee must be a positive user id.');
     const row = this.assignments.create({
       task_id: taskId,
       assignee_user_id: dto.assignee_user_id,
-      assigned_by_user_id: userId,
+      assigned_by_user_id: user.userId,
     });
     try {
       return await this.assignments.save(row);
@@ -202,8 +261,8 @@ export class TasksService {
     }
   }
 
-  async removeAssignment(userId: number, taskId: number, assigneeUserId: number): Promise<void> {
-    await this.getOwnedTask(userId, taskId);
+  async removeAssignment(user: { userId: number; token: string }, taskId: number, assigneeUserId: number): Promise<void> {
+    await this.getContributableTask(user, taskId);
     const row = await this.assignments.findOne({
       where: { task_id: taskId, assignee_user_id: assigneeUserId },
     });
@@ -211,8 +270,9 @@ export class TasksService {
     await this.assignments.remove(row);
   }
 
-  async addTag(userId: number, taskId: number, dto: AddTagDto) {
-    await this.getOwnedTask(userId, taskId);
+  async addTag(user: { userId: number; token: string }, taskId: number, dto: AddTagDto) {
+    const userId = user.userId;
+    await this.getContributableTask(user, taskId);
     const tag = dto.tag_id
       ? await this.getOwnedTag(userId, dto.tag_id)
       : await this.findOrCreateTag(userId, dto);
@@ -222,18 +282,18 @@ export class TasksService {
     } catch {
       throw new ConflictException('Tag is already attached to this task.');
     }
-    return this.findOne(userId, taskId);
+    return this.findOne(user, taskId);
   }
 
-  async removeTag(userId: number, taskId: number, tagId: number): Promise<void> {
-    await this.getOwnedTask(userId, taskId);
+  async removeTag(user: { userId: number; token: string }, taskId: number, tagId: number): Promise<void> {
+    await this.getContributableTask(user, taskId);
     const row = await this.taskTags.findOne({ where: { task_id: taskId, tag_id: tagId } });
     if (!row) throw new NotFoundException('Task tag not found');
     await this.taskTags.remove(row);
   }
 
-  async createSubtask(userId: number, taskId: number, dto: CreateSubtaskDto) {
-    await this.getOwnedTask(userId, taskId);
+  async createSubtask(user: { userId: number; token: string }, taskId: number, dto: CreateSubtaskDto) {
+    await this.getContributableTask(user, taskId);
     const row = this.subtasks.create({
       task_id: taskId,
       title: dto.title,
@@ -243,8 +303,8 @@ export class TasksService {
     return this.subtasks.save(row);
   }
 
-  async updateSubtask(userId: number, taskId: number, subtaskId: number, dto: UpdateSubtaskDto) {
-    await this.getOwnedTask(userId, taskId);
+  async updateSubtask(user: { userId: number; token: string }, taskId: number, subtaskId: number, dto: UpdateSubtaskDto) {
+    await this.getContributableTask(user, taskId);
     const row = await this.subtasks.findOne({ where: { id: subtaskId, task_id: taskId } });
     if (!row) throw new NotFoundException('Subtask not found');
     if (dto.title !== undefined) row.title = dto.title;
@@ -253,16 +313,16 @@ export class TasksService {
     return this.subtasks.save(row);
   }
 
-  async removeSubtask(userId: number, taskId: number, subtaskId: number): Promise<void> {
-    await this.getOwnedTask(userId, taskId);
+  async removeSubtask(user: { userId: number; token: string }, taskId: number, subtaskId: number): Promise<void> {
+    await this.getContributableTask(user, taskId);
     const row = await this.subtasks.findOne({ where: { id: subtaskId, task_id: taskId } });
     if (!row) throw new NotFoundException('Subtask not found');
     await this.subtasks.remove(row);
   }
 
-  async addDependency(userId: number, taskId: number, dto: AddDependencyDto) {
-    await this.getOwnedTask(userId, taskId);
-    await this.getOwnedTask(userId, dto.depends_on_task_id);
+  async addDependency(user: { userId: number; token: string }, taskId: number, dto: AddDependencyDto) {
+    await this.getContributableTask(user, taskId);
+    await this.getContributableTask(user, dto.depends_on_task_id);
     if (taskId === dto.depends_on_task_id) {
       throw new BadRequestException('A task cannot depend on itself.');
     }
@@ -280,15 +340,15 @@ export class TasksService {
     }
   }
 
-  async removeDependency(userId: number, taskId: number, dependencyId: number): Promise<void> {
-    await this.getOwnedTask(userId, taskId);
+  async removeDependency(user: { userId: number; token: string }, taskId: number, dependencyId: number): Promise<void> {
+    await this.getContributableTask(user, taskId);
     const row = await this.dependencies.findOne({ where: { id: dependencyId, task_id: taskId } });
     if (!row) throw new NotFoundException('Dependency not found');
     await this.dependencies.remove(row);
   }
 
-  async upsertRecurrence(userId: number, taskId: number, dto: UpsertRecurrenceDto) {
-    await this.getOwnedTask(userId, taskId);
+  async upsertRecurrence(user: { userId: number; token: string }, taskId: number, dto: UpsertRecurrenceDto) {
+    await this.getContributableTask(user, taskId);
     let row = await this.recurrences.findOne({ where: { task_id: taskId } });
     row ??= this.recurrences.create({ task_id: taskId });
     row.enabled = dto.enabled;
@@ -296,15 +356,15 @@ export class TasksService {
     return this.recurrences.save(row);
   }
 
-  async createReminder(userId: number, taskId: number, dto: CreateReminderDto) {
-    await this.getOwnedTask(userId, taskId);
+  async createReminder(user: { userId: number; token: string }, taskId: number, dto: CreateReminderDto) {
+    await this.getContributableTask(user, taskId);
     return this.reminders.save(
       this.reminders.create({ task_id: taskId, remind_at: new Date(dto.remind_at) }),
     );
   }
 
-  async removeReminder(userId: number, taskId: number, reminderId: number): Promise<void> {
-    await this.getOwnedTask(userId, taskId);
+  async removeReminder(user: { userId: number; token: string }, taskId: number, reminderId: number): Promise<void> {
+    await this.getContributableTask(user, taskId);
     const row = await this.reminders.findOne({ where: { id: reminderId, task_id: taskId } });
     if (!row) throw new NotFoundException('Reminder not found');
     await this.reminders.remove(row);
@@ -393,9 +453,93 @@ export class TasksService {
     await this.savedFilters.remove(row);
   }
 
+  async listComments(user: { userId: number; token: string }, taskId: number): Promise<TaskCommentResponse[]> {
+    await this.getVisibleTask(user, taskId);
+    const rows = await this.comments.find({
+      where: { task_id: taskId, deleted_at: IsNull() },
+      order: { created_at: 'ASC' },
+    });
+    return rows.map((comment) => this.toCommentResponse(comment));
+  }
+
+  async createComment(
+    user: { userId: number; token: string },
+    taskId: number,
+    dto: CreateCommentDto,
+  ): Promise<TaskCommentResponse> {
+    await this.getContributableTask(user, taskId);
+    const comment = this.comments.create({
+      task_id: taskId,
+      author_user_id: user.userId,
+      body: dto.body,
+    });
+    return this.toCommentResponse(await this.comments.save(comment));
+  }
+
+  async updateComment(
+    user: { userId: number; token: string },
+    taskId: number,
+    commentId: number,
+    dto: UpdateCommentDto,
+  ): Promise<TaskCommentResponse> {
+    await this.getVisibleTask(user, taskId);
+    const comment = await this.getVisibleComment(taskId, commentId);
+    if (comment.author_user_id !== user.userId) {
+      throw new ForbiddenException('Only the comment author can update this comment.');
+    }
+    if (dto.body !== undefined) comment.body = dto.body;
+    return this.toCommentResponse(await this.comments.save(comment));
+  }
+
+  async removeComment(user: { userId: number; token: string }, taskId: number, commentId: number): Promise<void> {
+    const task = await this.getVisibleTask(user, taskId);
+    const comment = await this.getVisibleComment(taskId, commentId);
+    await this.requireDeletePermission(user, comment.author_user_id, task.workspace_id);
+    comment.deleted_at = new Date();
+    comment.deleted_by_user_id = user.userId;
+    await this.comments.save(comment);
+  }
+
+  async commentPermission(user: { userId: number; token: string }, taskId: number, commentId: number) {
+    const task = await this.getVisibleTask(user, taskId);
+    const comment = await this.getVisibleComment(taskId, commentId);
+    const permission = task.workspace_id
+      ? await this.workspacePermission(user, task.workspace_id)
+      : null;
+    return {
+      taskId,
+      commentId,
+      workspace_id: task.workspace_id,
+      author_user_id: comment.author_user_id,
+      canView: true,
+      canContribute: permission?.canContribute ?? comment.author_user_id === user.userId,
+      canAdmin: permission?.canAdmin ?? false,
+      canDelete: comment.author_user_id === user.userId || Boolean(permission?.canAdmin),
+    };
+  }
+
+  async taskPermission(user: { userId: number; token: string }, taskId: number) {
+    const task = await this.getVisibleTask(user, taskId);
+    const permission = task.workspace_id
+      ? await this.workspacePermission(user, task.workspace_id)
+      : null;
+    const authorId = task.author_user_id ?? task.owner_user_id;
+    return {
+      taskId,
+      workspace_id: task.workspace_id,
+      author_user_id: authorId,
+      canView: true,
+      canContribute: permission?.canContribute ?? authorId === user.userId,
+      canAdmin: permission?.canAdmin ?? false,
+      canDelete: authorId === user.userId || Boolean(permission?.canAdmin),
+    };
+  }
+
   private toResponse(task: Task): TaskResponse {
     return {
       id: task.id,
+      workspace_id: task.workspace_id,
+      author_user_id: task.author_user_id ?? task.owner_user_id,
       title: task.title,
       description: task.description,
       done: Boolean(task.completed_at || task.status?.slug === 'done'),
@@ -403,6 +547,7 @@ export class TasksService {
       due_at: task.due_at,
       completed_at: task.completed_at,
       archived_at: task.archived_at,
+      deleted_at: task.deleted_at,
       created_at: task.created_at,
       updated_at: task.updated_at,
       status: task.status
@@ -440,6 +585,17 @@ export class TasksService {
     };
   }
 
+  private toCommentResponse(comment: TaskComment): TaskCommentResponse {
+    return {
+      id: comment.id,
+      task_id: comment.task_id,
+      author_user_id: comment.author_user_id,
+      body: comment.body,
+      created_at: comment.created_at,
+      updated_at: comment.updated_at,
+    };
+  }
+
   private taskRelations() {
     return {
       status: true,
@@ -452,13 +608,36 @@ export class TasksService {
     };
   }
 
-  private async getOwnedTask(userId: number, id: number): Promise<Task> {
+  private async getVisibleTask(user: { userId: number; token: string }, id: number): Promise<Task> {
     const task = await this.tasks.findOne({
-      where: { id, owner_user_id: userId },
+      where: { id, deleted_at: IsNull() },
       relations: this.taskRelations(),
     });
     if (!task) throw new NotFoundException('Task not found');
+    if (task.workspace_id == null) {
+      if (task.owner_user_id !== user.userId) throw new NotFoundException('Task not found');
+      return task;
+    }
+    await this.requireWorkspacePermission(user, task.workspace_id, 'view');
     return task;
+  }
+
+  private async getContributableTask(user: { userId: number; token: string }, id: number): Promise<Task> {
+    const task = await this.getVisibleTask(user, id);
+    if (task.workspace_id == null) {
+      if (task.owner_user_id !== user.userId) throw new ForbiddenException('Task access denied.');
+      return task;
+    }
+    await this.requireWorkspacePermission(user, task.workspace_id, 'contribute');
+    return task;
+  }
+
+  private async getVisibleComment(taskId: number, commentId: number): Promise<TaskComment> {
+    const comment = await this.comments.findOne({
+      where: { id: commentId, task_id: taskId, deleted_at: IsNull() },
+    });
+    if (!comment) throw new NotFoundException('Comment not found');
+    return comment;
   }
 
   private async getOwnedStatus(userId: number, id: number): Promise<TaskStatus> {
@@ -510,6 +689,73 @@ export class TasksService {
       const existing = await this.columns.findOne({ where: { owner_user_id: userId, name: column.name } });
       if (!existing) await this.columns.save(this.columns.create({ owner_user_id: userId, ...column }));
     }
+  }
+
+  private async visibleWorkspaceIds(user: { userId: number; token: string }): Promise<number[]> {
+    const response = await fetch(`${this.workspaceBaseUrl()}/api/workspaces/`, {
+      headers: { Authorization: `Bearer ${user.token}` },
+    });
+    if (!response.ok) {
+      throw new ForbiddenException('Workspace access check failed.');
+    }
+    const workspaces = (await response.json()) as WorkspaceSummary[];
+    return workspaces.map((workspace) => workspace.id);
+  }
+
+  private async personalWorkspaceId(user: { userId: number; token: string }): Promise<number> {
+    const response = await fetch(`${this.workspaceBaseUrl()}/api/workspaces/`, {
+      headers: { Authorization: `Bearer ${user.token}` },
+    });
+    if (!response.ok) {
+      throw new ForbiddenException('Could not resolve personal workspace.');
+    }
+    const workspaces = (await response.json()) as WorkspaceSummary[];
+    const personal = workspaces.find((workspace) => workspace.workspaceType === 'PERSONAL');
+    if (!personal) throw new NotFoundException('Personal workspace not found');
+    return personal.id;
+  }
+
+  private async requireWorkspacePermission(
+    user: { userId: number; token: string },
+    workspaceId: number,
+    action: 'view' | 'contribute',
+  ): Promise<WorkspacePermission> {
+    const permission = await this.workspacePermission(user, workspaceId);
+    if (action === 'view' && !permission.canView) throw new NotFoundException('Workspace not found');
+    if (action === 'contribute' && !permission.canContribute) {
+      throw new ForbiddenException('Workspace contribution permission required.');
+    }
+    return permission;
+  }
+
+  private async workspacePermission(
+    user: { userId: number; token: string },
+    workspaceId: number,
+  ): Promise<WorkspacePermission> {
+    const response = await fetch(`${this.workspaceBaseUrl()}/api/workspaces/${workspaceId}/permissions/me`, {
+      headers: { Authorization: `Bearer ${user.token}` },
+    });
+    if (response.status === 404) throw new NotFoundException('Workspace not found');
+    if (response.status === 403 || response.status === 401) throw new ForbiddenException('Workspace access denied.');
+    if (!response.ok) throw new ForbiddenException('Workspace access check failed.');
+    return (await response.json()) as WorkspacePermission;
+  }
+
+  private async requireDeletePermission(
+    user: { userId: number; token: string },
+    authorUserId: number,
+    workspaceId: number | null,
+  ): Promise<void> {
+    if (authorUserId === user.userId) return;
+    if (workspaceId != null) {
+      const permission = await this.workspacePermission(user, workspaceId);
+      if (permission.canAdmin) return;
+    }
+    throw new ForbiddenException('Only the original author or workspace admin can delete this resource.');
+  }
+
+  private workspaceBaseUrl(): string {
+    return this.config.get<string>('WORKSPACE_SERVICE_BASE_URL', 'http://workspace-service:8000').replace(/\/+$/, '');
   }
 
   private async wouldCreateDependencyCycle(taskId: number, dependsOnTaskId: number): Promise<boolean> {

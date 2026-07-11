@@ -41,6 +41,7 @@ python manage.py runserver 0.0.0.0:8000
 - Login-attempt tracking
 - Account locking after repeated failed login attempts
 - Profile creation handoff to `user-service` through `api-gateway`
+- Personal workspace creation handoff to `workspace-service` through `api-gateway`
 
 ## Owned Data
 
@@ -144,7 +145,7 @@ If 2FA is enabled but no code is supplied, login returns HTTP 202:
 
 ## Inter-Service Communication
 
-On registration, the service posts to:
+On registration, the service posts to `user-service`:
 
 ```text
 http://api-gateway/api/profiles/
@@ -167,6 +168,30 @@ X-Internal-Key: <INTERNAL_API_KEY>
 ```
 
 This keeps `auth-service` from calling `user-service` directly and preserves gateway routing as the internal reception path.
+
+It also posts to `workspace-service`:
+
+```text
+http://api-gateway/api/workspaces/internal/personal
+```
+
+Payload:
+
+```json
+{
+  "authUserId": 1,
+  "username": "alice"
+}
+```
+
+Header:
+
+```text
+X-Internal-Key: <INTERNAL_API_KEY>
+```
+
+That endpoint is idempotent and ensures each registered user has a private
+personal workspace.
 
 ## Environment Variables
 

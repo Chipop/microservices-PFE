@@ -29,6 +29,9 @@ public class Attachment {
     @Column(name = "target_id", nullable = false)
     private Long targetId;
 
+    @Column(name = "parent_task_id", nullable = false)
+    private Long parentTaskId;
+
     @Column(name = "original_filename", nullable = false, length = 255)
     private String originalFilename;
 
@@ -46,6 +49,9 @@ public class Attachment {
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
+
+    @Column(name = "deleted_by_user_id")
+    private Long deletedByUserId;
 
     @PrePersist
     void prePersist() {
@@ -80,6 +86,14 @@ public class Attachment {
 
     public void setTargetId(Long targetId) {
         this.targetId = targetId;
+    }
+
+    public Long getParentTaskId() {
+        return parentTaskId;
+    }
+
+    public void setParentTaskId(Long parentTaskId) {
+        this.parentTaskId = parentTaskId;
     }
 
     public String getOriginalFilename() {
@@ -124,5 +138,13 @@ public class Attachment {
 
     public void setDeletedAt(Instant deletedAt) {
         this.deletedAt = deletedAt;
+    }
+
+    public Long getDeletedByUserId() {
+        return deletedByUserId;
+    }
+
+    public void setDeletedByUserId(Long deletedByUserId) {
+        this.deletedByUserId = deletedByUserId;
     }
 }

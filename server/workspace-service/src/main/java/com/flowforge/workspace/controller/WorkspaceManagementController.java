@@ -35,6 +35,11 @@ public class WorkspaceManagementController {
         return service.get(userId(jwt), workspaceId);
     }
 
+    @GetMapping("/{workspaceId}/permissions/me")
+    public WorkspacePermissionResponse permissions(@AuthenticationPrincipal Jwt jwt, @PathVariable Long workspaceId) {
+        return service.permissions(userId(jwt), workspaceId);
+    }
+
     @PatchMapping("/{workspaceId}")
     public WorkspaceResponse update(
             @AuthenticationPrincipal Jwt jwt,
@@ -62,6 +67,16 @@ public class WorkspaceManagementController {
             @Valid @RequestBody TransferOwnershipRequest request
     ) {
         return service.transferOwnership(userId(jwt), workspaceId, request);
+    }
+
+    @PostMapping("/internal/personal")
+    @ResponseStatus(HttpStatus.CREATED)
+    public WorkspaceResponse ensurePersonal(
+            @RequestHeader(value = "X-Internal-Key", required = false) String internalKey,
+            @Valid @RequestBody InternalPersonalWorkspaceRequest request
+    ) {
+        service.validateInternalKey(internalKey);
+        return service.ensurePersonalWorkspace(request.authUserId(), request.username());
     }
 
     private Long userId(Jwt jwt) {

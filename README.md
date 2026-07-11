@@ -81,39 +81,42 @@ storage backend.
 - `POST / PUT / DELETE /api/profiles/picture/` — upload, replace, or remove profile picture
 
 ### `server/task-service/` — Task service (port 8003, NestJS)
-Owns task CRUD plus task metadata such as statuses, priorities, deadlines,
+Owns workspace-scoped task CRUD plus task metadata such as statuses, priorities, deadlines,
 assignments, tags, subtasks, dependencies, recurrence configuration, reminders,
-Kanban columns, and saved filters. Every task is scoped to the `user_id` inside
-the JWT, so users only ever see
-their own (a cross-user id is a `404`). Auth is **stateless**: the service has no
+Kanban columns, saved filters, and comments. Task access is checked through
+workspace visibility/contribution permissions. Auth is **stateless**: the service has no
 users table — it verifies the shared HS256 JWT and trusts the `user_id` claim.
 Persists to its own `tasks-db` Postgres container via TypeORM.
 - `GET / POST /api/tasks/`
 - `GET / PATCH / DELETE /api/tasks/{id}/`
 - `POST /api/tasks/{id}/complete`
 - `POST /api/tasks/{id}/archive`
+- `GET / POST /api/tasks/{id}/comments`
 
   Task responses include `done` as a derived compatibility field, while the
   service stores richer task state internally.
 
 ### `server/workspace-service/` — Workspace service (port 8004, Spring Boot)
-Owns workspace membership and invitation workflows. It validates the shared JWT,
+Owns workspace membership, visibility, personal workspace creation, and invitation workflows. It validates the shared JWT,
 extracts the `user_id` claim, and enforces fixed workspace roles internally.
 Persists to its own `workspaces-db` Postgres container via Spring Data JPA and
 Flyway.
 - `GET / POST /api/workspaces/`
 - `GET / PATCH / DELETE /api/workspaces/{id}`
+- `GET /api/workspaces/{id}/permissions/me`
 - `POST /api/workspaces/{id}/archive`
 - `GET / POST /api/workspaces/{id}/invitations`
 - `POST /api/workspaces/invitations/{token}/accept`
 
 ### `server/attachment-service/` — Attachment service (port 8005, Spring Boot)
-Owns attachment metadata and Azure Blob Storage integration for task files. It
+Owns attachment metadata and Azure Blob Storage integration for task and comment files. It
 validates the shared JWT, checks task visibility by calling `task-service` with
 the caller's bearer token, stores metadata in its own `attachments-db`, and
-keeps file bytes in the configured private Azure Blob container.
+keeps file bytes in the configured private Azure Blob container. Deletes hide
+attachment metadata but retain Azure blobs for audit.
 - `POST /api/attachments/tasks/{taskId}` — upload a file to a visible task
 - `GET /api/attachments/tasks/{taskId}` — list task attachments
+- `POST / GET /api/attachments/tasks/{taskId}/comments/{commentId}` — manage comment attachments
 - `GET /api/attachments/{attachmentId}` — read attachment metadata
 - `POST /api/attachments/{attachmentId}/download-link` — generate a signed download URL
 - `DELETE /api/attachments/{attachmentId}` — delete an attachment uploaded by the caller

@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record WorkspaceProperties(
         String jwtSigningKey,
         long invitationTtlHours,
-        String corsAllowedOrigins
+        String corsAllowedOrigins,
+        String internalApiKey
 ) {
 }

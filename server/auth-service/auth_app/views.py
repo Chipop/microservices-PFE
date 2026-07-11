@@ -58,6 +58,18 @@ class RegisterView(generics.CreateAPIView):
             )
         except requests.RequestException:
             pass
+        try:
+            requests.post(
+                f"{gateway}/api/workspaces/internal/personal",
+                json={
+                    "authUserId": user.id,
+                    "username": user.username,
+                },
+                headers={"X-Internal-Key": os.environ.get("INTERNAL_API_KEY")},
+                timeout=3,
+            )
+        except requests.RequestException:
+            pass
 
 
 class LoginView(APIView):

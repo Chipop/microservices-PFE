@@ -27,6 +27,12 @@ public class WorkspaceMember {
     @Column(name = "joined_at", nullable = false)
     private Instant joinedAt = Instant.now();
 
+    @Column(name = "removed_at")
+    private Instant removedAt;
+
+    @Column(name = "removed_by_user_id")
+    private Long removedByUserId;
+
     public Long getId() {
         return id;
     }
@@ -57,5 +63,21 @@ public class WorkspaceMember {
 
     public Instant getJoinedAt() {
         return joinedAt;
+    }
+
+    public Instant getRemovedAt() {
+        return removedAt;
+    }
+
+    public void setRemovedAt(Instant removedAt) {
+        this.removedAt = removedAt;
+    }
+
+    public Long getRemovedByUserId() {
+        return removedByUserId;
+    }
+
+    public void setRemovedByUserId(Long removedByUserId) {
+        this.removedByUserId = removedByUserId;
     }
 }

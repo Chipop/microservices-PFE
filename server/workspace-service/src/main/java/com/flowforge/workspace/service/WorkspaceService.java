@@ -43,10 +43,11 @@ public class WorkspaceService {
         this.events = events;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<WorkspaceResponse> list(Long userId) {
+        ensurePersonalWorkspace(userId, "User " + userId);
         return workspaces.findAllForUser(userId).stream()
-                .map(workspace -> toResponse(workspace, requireMember(workspace.getId(), userId).getRole()))
+                .map(workspace -> toResponse(workspace, activeMember(workspace.getId(), userId).orElse(null)))
                 .toList();
     }
 
@@ -56,6 +57,9 @@ public class WorkspaceService {
         workspace.setName(request.name());
         workspace.setDescription(request.description());
         workspace.setOwnerUserId(userId);
+        workspace.setVisibility(request.visibility());
+        workspace.setPublicContributionsEnabled(Boolean.TRUE.equals(request.publicContributionsEnabled()));
+        workspace.setWorkspaceType(WorkspaceType.TEAM);
         workspace = workspaces.save(workspace);
 
         var owner = new WorkspaceMember();
@@ -65,13 +69,13 @@ public class WorkspaceService {
         members.save(owner);
 
         events.publish("WorkspaceCreated", workspace.getId(), userId);
-        return toResponse(workspace, WorkspaceRole.OWNER);
+        return toResponse(workspace, owner);
     }
 
     @Transactional(readOnly = true)
     public WorkspaceResponse get(Long userId, Long workspaceId) {
         var workspace = visibleWorkspace(workspaceId, userId);
-        return toResponse(workspace, requireMember(workspaceId, userId).getRole());
+        return toResponse(workspace, activeMember(workspaceId, userId).orElse(null));
     }
 
     @Transactional
@@ -81,8 +85,12 @@ public class WorkspaceService {
         requireAdminOrOwner(workspaceId, userId);
         if (request.name() != null) workspace.setName(request.name());
         if (request.description() != null) workspace.setDescription(request.description());
+        if (request.visibility() != null) workspace.setVisibility(request.visibility());
+        if (request.publicContributionsEnabled() != null) {
+            workspace.setPublicContributionsEnabled(request.publicContributionsEnabled());
+        }
         events.publish("WorkspaceUpdated", workspaceId, userId);
-        return toResponse(workspace, requireMember(workspaceId, userId).getRole());
+        return toResponse(workspace, requireMember(workspaceId, userId));
     }
 
     @Transactional
@@ -93,21 +101,22 @@ public class WorkspaceService {
             workspace.setArchivedAt(Instant.now());
             events.publish("WorkspaceUpdated", workspaceId, userId);
         }
-        return toResponse(workspace, WorkspaceRole.OWNER);
+        return toResponse(workspace, requireMember(workspaceId, userId));
     }
 
     @Transactional
     public void delete(Long userId, Long workspaceId) {
         var workspace = visibleWorkspace(workspaceId, userId);
         requireOwner(workspaceId, userId);
-        workspaces.delete(workspace);
+        workspace.setDeletedAt(Instant.now());
+        workspace.setDeletedByUserId(userId);
         events.publish("WorkspaceDeleted", workspaceId, userId);
     }
 
     @Transactional(readOnly = true)
     public List<MemberResponse> listMembers(Long userId, Long workspaceId) {
         visibleWorkspace(workspaceId, userId);
-        return members.findByWorkspaceIdOrderByJoinedAtAsc(workspaceId).stream()
+        return members.findByWorkspaceIdAndRemovedAtIsNullOrderByJoinedAtAsc(workspaceId).stream()
                 .map(this::toMemberResponse)
                 .toList();
     }
@@ -139,7 +148,8 @@ public class WorkspaceService {
         if (target.getRole() == WorkspaceRole.OWNER) {
             throw badRequest("Owner cannot be removed.");
         }
-        members.delete(target);
+        target.setRemovedAt(Instant.now());
+        target.setRemovedByUserId(userId);
         events.publish("MemberRemoved", workspaceId, userId);
     }
 
@@ -155,7 +165,7 @@ public class WorkspaceService {
         workspace.setOwnerUserId(newOwner.getUserId());
         events.publish("MemberRoleChanged", workspaceId, userId);
         events.publish("WorkspaceUpdated", workspaceId, userId);
-        return toResponse(workspace, WorkspaceRole.ADMIN);
+        return toResponse(workspace, currentOwner);
     }
 
     @Transactional(readOnly = true)
@@ -196,18 +206,43 @@ public class WorkspaceService {
         var workspace = invitation.getWorkspace();
         rejectArchived(workspace);
 
-        if (!members.existsByWorkspaceIdAndUserId(workspace.getId(), userId)) {
+        var existing = members.findByWorkspaceIdAndUserId(workspace.getId(), userId).orElse(null);
+        if (existing == null) {
             var member = new WorkspaceMember();
             member.setWorkspace(workspace);
             member.setUserId(userId);
             member.setRole(invitation.getRole());
             members.save(member);
+        } else if (existing.getRemovedAt() != null) {
+            existing.setRemovedAt(null);
+            existing.setRemovedByUserId(null);
+            existing.setRole(invitation.getRole());
         }
         invitation.setInvitedUserId(userId);
         invitation.setStatus(InvitationStatus.ACCEPTED);
         invitation.setRespondedAt(Instant.now());
         events.publish("InvitationAccepted", workspace.getId(), userId);
         return toInvitationResponse(invitation, null);
+    }
+
+    @Transactional
+    public WorkspaceResponse ensurePersonalWorkspace(Long userId, String username) {
+        var workspace = ensurePersonalWorkspaceEntity(userId, username);
+        return toResponse(workspace, requireMember(workspace.getId(), userId));
+    }
+
+    @Transactional(readOnly = true)
+    public WorkspacePermissionResponse permissions(Long userId, Long workspaceId) {
+        var workspace = visibleWorkspace(workspaceId, userId);
+        var member = activeMember(workspaceId, userId).orElse(null);
+        return toPermissionResponse(workspace, member);
+    }
+
+    public void validateInternalKey(String internalKey) {
+        if (properties.internalApiKey() == null || properties.internalApiKey().isBlank()
+                || !properties.internalApiKey().equals(internalKey)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid internal key");
+        }
     }
 
     @Transactional
@@ -225,8 +260,12 @@ public class WorkspaceService {
     }
 
     private WorkspaceMember requireMember(Long workspaceId, Long userId) {
-        return members.findByWorkspaceIdAndUserId(workspaceId, userId)
+        return members.findByWorkspaceIdAndUserIdAndRemovedAtIsNull(workspaceId, userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workspace not found"));
+    }
+
+    private java.util.Optional<WorkspaceMember> activeMember(Long workspaceId, Long userId) {
+        return members.findByWorkspaceIdAndUserIdAndRemovedAtIsNull(workspaceId, userId);
     }
 
     private WorkspaceMember requireOwner(Long workspaceId, Long userId) {
@@ -263,16 +302,82 @@ public class WorkspaceService {
         return invitation;
     }
 
-    private WorkspaceResponse toResponse(Workspace workspace, WorkspaceRole currentUserRole) {
+    private Workspace ensurePersonalWorkspaceEntity(Long userId, String username) {
+        var existing = workspaces.findByOwnerUserIdAndWorkspaceTypeAndDeletedAtIsNull(userId, WorkspaceType.PERSONAL);
+        if (existing.isPresent()) {
+            var workspace = existing.get();
+            var member = members.findByWorkspaceIdAndUserId(workspace.getId(), userId).orElse(null);
+            if (member == null) {
+                member = new WorkspaceMember();
+                member.setWorkspace(workspace);
+                member.setUserId(userId);
+                member.setRole(WorkspaceRole.OWNER);
+                members.save(member);
+            } else if (member.getRemovedAt() != null) {
+                member.setRemovedAt(null);
+                member.setRemovedByUserId(null);
+                member.setRole(WorkspaceRole.OWNER);
+            }
+            return workspace;
+        }
+
+        var workspace = new Workspace();
+        workspace.setName(username + "'s Workspace");
+        workspace.setDescription("Personal workspace");
+        workspace.setOwnerUserId(userId);
+        workspace.setWorkspaceType(WorkspaceType.PERSONAL);
+        workspace.setVisibility(WorkspaceVisibility.PRIVATE);
+        workspace.setPublicContributionsEnabled(false);
+        workspace = workspaces.save(workspace);
+
+        var owner = new WorkspaceMember();
+        owner.setWorkspace(workspace);
+        owner.setUserId(userId);
+        owner.setRole(WorkspaceRole.OWNER);
+        members.save(owner);
+        events.publish("WorkspaceCreated", workspace.getId(), userId);
+        return workspace;
+    }
+
+    private WorkspaceResponse toResponse(Workspace workspace, WorkspaceMember member) {
+        var permission = toPermissionResponse(workspace, member);
         return new WorkspaceResponse(
                 workspace.getId(),
                 workspace.getName(),
                 workspace.getDescription(),
                 workspace.getOwnerUserId(),
+                workspace.getVisibility(),
+                workspace.isPublicContributionsEnabled(),
+                workspace.getWorkspaceType(),
                 workspace.getArchivedAt(),
+                workspace.getDeletedAt(),
                 workspace.getCreatedAt(),
                 workspace.getUpdatedAt(),
-                currentUserRole
+                member == null ? null : member.getRole(),
+                permission.canView(),
+                permission.canContribute(),
+                permission.canAdmin()
+        );
+    }
+
+    private WorkspacePermissionResponse toPermissionResponse(Workspace workspace, WorkspaceMember member) {
+        var role = member == null ? null : member.getRole();
+        var admin = role == WorkspaceRole.OWNER || role == WorkspaceRole.ADMIN;
+        var memberCanContribute = role == WorkspaceRole.OWNER || role == WorkspaceRole.ADMIN || role == WorkspaceRole.MEMBER;
+        var publicWorkspace = workspace.getVisibility() == WorkspaceVisibility.PUBLIC;
+        var canView = member != null || publicWorkspace;
+        var canContribute = admin || memberCanContribute || (publicWorkspace && workspace.isPublicContributionsEnabled());
+        if (workspace.getArchivedAt() != null || workspace.getDeletedAt() != null) {
+            canContribute = false;
+        }
+        return new WorkspacePermissionResponse(
+                workspace.getId(),
+                workspace.getVisibility(),
+                member != null,
+                role,
+                canView,
+                canContribute,
+                admin
         );
     }
 

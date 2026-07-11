@@ -167,6 +167,7 @@ services:
       - POSTGRES_USER=todo
       - POSTGRES_PASSWORD=todo
       - TASK_SCHEMA_SYNC=true
+      - WORKSPACE_SERVICE_BASE_URL=http://workspace-service:8000
     ports:
       - "8003:8000"
     depends_on:
@@ -179,6 +180,7 @@ services:
     container_name: workspace-service
     environment:
       - JWT_SIGNING_KEY=this-is-a-much-longer-shared-secret-key-32plus
+      - INTERNAL_API_KEY=INTERNAL-CHANGE-ME
       - PORT=8000
       - POSTGRES_HOST=workspaces-db
       - POSTGRES_PORT=5432

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`workspace-service` owns workspace membership and invitation workflows. It is a
+`workspace-service` owns workspace membership, visibility, and invitation workflows. It is a
 Spring Boot service built with Maven and Java 21, exposed through the gateway at
 `/api/workspaces/`.
 
@@ -24,7 +24,10 @@ role checks. It does not store passwords, auth tokens, or user profile data.
 
 ## Responsibilities
 
-- Create, update, archive, and delete workspaces.
+- Create, update, archive, and soft-delete workspaces.
+- Create a private personal workspace for each registered user.
+- Manage private/public workspace visibility.
+- Control whether logged-in non-members can contribute to public workspaces.
 - Manage workspace members.
 - Create, accept, and reject workspace invitations.
 - Assign member roles.
@@ -57,12 +60,13 @@ Workspace routes:
 
 | Method | Path | Description |
 |---|---:|---|
-| `GET` | `/api/workspaces/` | List workspaces where the caller is a member. |
+| `GET` | `/api/workspaces/` | List member workspaces plus public workspaces visible to the caller. |
 | `POST` | `/api/workspaces/` | Create a workspace; caller becomes owner. |
 | `GET` | `/api/workspaces/{id}` | Read one visible workspace. |
 | `PATCH` | `/api/workspaces/{id}` | Update name/description. |
 | `POST` | `/api/workspaces/{id}/archive` | Archive a workspace. |
-| `DELETE` | `/api/workspaces/{id}` | Delete a workspace. |
+| `DELETE` | `/api/workspaces/{id}` | Soft-delete a workspace. |
+| `GET` | `/api/workspaces/{id}/permissions/me` | Return caller permissions for this workspace. |
 
 Member routes:
 
@@ -83,7 +87,9 @@ Create workspace payload:
 ```json
 {
   "name": "Engineering",
-  "description": "Product engineering workspace"
+  "description": "Product engineering workspace",
+  "visibility": "PRIVATE",
+  "publicContributionsEnabled": false
 }
 ```
 
@@ -108,7 +114,32 @@ that token.
 - `MEMBER`: read workspace and members.
 - `VIEWER`: read workspace and members.
 
-Archived workspaces are readable but reject mutations.
+- Private workspaces are visible only to active members.
+- Public workspaces are visible to any logged-in user.
+- Public workspaces with `publicContributionsEnabled=true` allow logged-in non-members to contribute.
+- Archived or deleted workspaces reject mutations.
+- Deleted workspaces and removed members are retained for audit.
+
+## Internal API
+
+`auth-service` calls this endpoint during registration:
+
+```text
+POST /api/workspaces/internal/personal
+X-Internal-Key: <INTERNAL_API_KEY>
+```
+
+Payload:
+
+```json
+{
+  "authUserId": 1,
+  "username": "alice"
+}
+```
+
+The endpoint is idempotent and creates or restores the user's private personal
+workspace.
 
 ## Events
 
@@ -130,6 +161,7 @@ it later without changing controller code.
 | Variable | Required | Purpose |
 |---|---:|---|
 | `JWT_SIGNING_KEY` | Yes | Shared HS256 key used by `auth-service`. |
+| `INTERNAL_API_KEY` | Yes | Allows internal personal workspace creation. |
 | `PORT` | No | Service port, defaults to `8000`. |
 | `POSTGRES_HOST` | In Compose | DB hostname. |
 | `POSTGRES_PORT` | In Compose | DB port, defaults to `5432`. |

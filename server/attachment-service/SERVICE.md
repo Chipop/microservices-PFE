@@ -3,7 +3,7 @@
 ## Purpose
 
 `attachment-service` owns file attachment metadata and secure download links for
-task attachments. It is a Spring Boot service built with Maven and Java 21,
+task and comment attachments. It is a Spring Boot service built with Maven and Java 21,
 exposed through the gateway at `/api/attachments/`.
 
 The service validates the JWT access token issued by `auth-service`, extracts
@@ -26,15 +26,12 @@ databases directly.
 
 ## Responsibilities
 
-- Upload task attachment files.
+- Upload task and comment attachment files.
 - Store attachment metadata in its own database.
 - Validate file content types and sizes.
 - Check task access permissions through `task-service`.
 - Generate short-lived secure download links.
-- Delete attachment blobs and soft-delete metadata.
-
-Comment attachments are reserved for a later version. The current API rejects
-comment attachment operations until a comment ownership contract exists.
+- Soft-delete attachment metadata while retaining Azure blobs for audit.
 
 ## Owned Data
 
@@ -43,6 +40,7 @@ The service owns the `attachments` table:
 - `uploader_user_id`
 - `target_type`
 - `target_id`
+- `parent_task_id`
 - `original_filename`
 - `stored_blob_key`
 - `content_type`
@@ -66,9 +64,11 @@ Task attachment routes:
 |---|---:|---|
 | `POST` | `/api/attachments/tasks/{taskId}` | Upload an attachment to a visible task. |
 | `GET` | `/api/attachments/tasks/{taskId}` | List non-deleted attachments for a visible task. |
+| `POST` | `/api/attachments/tasks/{taskId}/comments/{commentId}` | Upload an attachment to a visible comment. |
+| `GET` | `/api/attachments/tasks/{taskId}/comments/{commentId}` | List non-deleted attachments for a visible comment. |
 | `GET` | `/api/attachments/{attachmentId}` | Read attachment metadata after target access is verified. |
 | `POST` | `/api/attachments/{attachmentId}/download-link` | Generate a short-lived Azure Blob read URL. |
-| `DELETE` | `/api/attachments/{attachmentId}` | Delete an attachment. Only the uploader can delete. |
+| `DELETE` | `/api/attachments/{attachmentId}` | Soft-delete an attachment. Uploader or workspace admin only. |
 
 Upload uses multipart form data:
 
@@ -83,6 +83,7 @@ Example metadata response:
   "id": 1,
   "targetType": "TASK",
   "targetId": 42,
+  "parentTaskId": 42,
   "originalFilename": "spec.pdf",
   "contentType": "application/pdf",
   "sizeBytes": 12345,
@@ -103,11 +104,13 @@ Download link response:
 ## Permissions
 
 - Every operation validates the caller's JWT locally.
-- For task attachments, the service calls `GET /api/tasks/{taskId}` on
-  `task-service` with the same bearer token.
+- For task attachments, the service calls `GET /api/tasks/{taskId}/permissions`
+  on `task-service` with the same bearer token.
+- For comment attachments, it calls
+  `GET /api/tasks/{taskId}/comments/{commentId}/permissions`.
 - A task-service `200` allows the attachment operation.
 - A task-service `404` is returned as `404 Task not found`.
-- Only the uploader can delete an attachment in this version.
+- The original uploader or workspace admin can delete an attachment.
 - Cross-service database access is not allowed.
 
 ## Storage
@@ -119,7 +122,8 @@ attachments/{uploaderUserId}/{uuid}/{safeOriginalFilename}
 ```
 
 The Azure container should remain private. Clients never receive raw blob keys;
-they receive signed read URLs only after permission checks.
+they receive signed read URLs only after permission checks. Deleted attachments
+keep their Azure blobs for audit and traceability.
 
 ## Environment Variables
 
@@ -156,7 +160,7 @@ service fails fast if migrations and entities drift.
 - Do not call another service's database.
 - Do not let clients choose `uploader_user_id` or storage keys.
 - Treat `auth-service` `user_id` as the identity boundary.
-- Keep comment attachment support disabled until comments have an ownership API.
+- Do not delete Azure blobs for user-requested attachment deletes.
 
 ## Local Commands
 

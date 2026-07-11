@@ -16,6 +16,11 @@ import {
 import { TaskPriority } from '../entities/task.entity';
 
 export class CreateTaskDto {
+  @IsOptional()
+  @IsInt()
+  @IsPositive()
+  workspace_id?: number;
+
   @IsString()
   @IsNotEmpty()
   @MaxLength(200)
@@ -47,6 +52,15 @@ export class CreateTaskDto {
 }
 
 export class UpdateTaskDto extends PartialType(CreateTaskDto) {}
+
+export class CreateCommentDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(4000)
+  body: string;
+}
+
+export class UpdateCommentDto extends PartialType(CreateCommentDto) {}
 
 export class AssignTaskDto {
   @IsInt()
@@ -159,6 +173,12 @@ export class CreateSavedFilterDto {
 export class UpdateSavedFilterDto extends PartialType(CreateSavedFilterDto) {}
 
 export class ListTasksQueryDto {
+  @IsOptional()
+  @IsInt()
+  @IsPositive()
+  @Type(() => Number)
+  workspace_id?: number;
+
   @IsOptional()
   @Type(() => Boolean)
   @IsBoolean()

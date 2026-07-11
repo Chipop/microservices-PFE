@@ -2,13 +2,13 @@
 
 ## Purpose
 
-`task-service` owns task management for the platform. It replaces the former
-simple todo runtime and exposes the public gateway contract under `/api/tasks/`.
+`task-service` owns workspace-scoped task management and task comments. It
+replaces the former simple todo runtime and exposes the public gateway contract
+under `/api/tasks/`.
 
 The service is stateless for authentication. It validates the JWT access token
-issued by `auth-service`, extracts the `user_id` claim, and scopes all task
-access to that owner. It does not call `auth-service` or `user-service` during
-request handling.
+issued by `auth-service`, extracts the `user_id` claim, and checks workspace
+visibility/contribution permissions through `workspace-service`.
 
 ## Runtime
 
@@ -23,12 +23,12 @@ request handling.
 
 ## Responsibilities
 
-- Create, retrieve, edit, delete, archive, and complete tasks.
+- Create, retrieve, edit, soft-delete, archive, and complete tasks.
+- Manage task comments.
 - Manage statuses, priorities, deadlines, tags, subtasks, dependencies,
   recurrence configuration, reminders, Kanban columns, and saved filters.
 - Assign tasks by auth user id.
-- Validate task permissions by owner-scoping every operation to the JWT
-  `user_id`.
+- Validate task permissions through workspace visibility and contribution rules.
 - Hide cross-user tasks by returning `404`.
 
 Events are intentionally not published yet. Task mutations are centralized in
@@ -41,6 +41,7 @@ The service owns its full task database. Other services must not read or write
 these tables directly.
 
 - `tasks`
+- `task_comments`
 - `task_statuses`
 - `task_assignments`
 - `tags`
@@ -52,8 +53,8 @@ these tables directly.
 - `kanban_columns`
 - `saved_filters`
 
-Assignments store auth user IDs only. The service does not store passwords,
-tokens, or user profile data.
+Tasks store `workspace_id` and `author_user_id`. Assignments store auth user IDs
+only. The service does not store passwords, tokens, or user profile data.
 
 ## Public API
 
@@ -67,18 +68,20 @@ Core task routes:
 
 | Method | Path | Description |
 |---|---:|---|
-| `GET` | `/api/tasks/` | List active tasks owned by the JWT user. |
+| `GET` | `/api/tasks/` | List active tasks in workspaces visible to the JWT user. |
 | `POST` | `/api/tasks/` | Create a task. |
-| `GET` | `/api/tasks/{id}/` | Read one owned task. |
-| `PATCH` | `/api/tasks/{id}/` | Update one owned task. |
-| `DELETE` | `/api/tasks/{id}/` | Hard-delete one owned task. |
+| `GET` | `/api/tasks/{id}/` | Read one visible task. |
+| `PATCH` | `/api/tasks/{id}/` | Update one task where the caller can contribute. |
+| `DELETE` | `/api/tasks/{id}/` | Soft-delete one task if caller is author or workspace admin. |
 | `POST` | `/api/tasks/{id}/complete` | Mark a task complete. |
 | `POST` | `/api/tasks/{id}/archive` | Archive a task without deleting it. |
+| `GET` | `/api/tasks/{id}/permissions` | Permission summary for other services. |
 
 The former simple payload still works through `/api/tasks/`:
 
 ```json
 {
+  "workspace_id": 1,
   "title": "first task",
   "done": false
 }
@@ -89,6 +92,8 @@ Task responses include a derived `done` boolean for frontend compatibility:
 ```json
 {
   "id": 1,
+  "workspace_id": 1,
+  "author_user_id": 1,
   "title": "first task",
   "description": "",
   "done": false,
@@ -96,6 +101,7 @@ Task responses include a derived `done` boolean for frontend compatibility:
   "due_at": null,
   "completed_at": null,
   "archived_at": null,
+  "deleted_at": null,
   "status": { "id": 1, "name": "Todo", "slug": "todo" },
   "created_at": "2026-07-11T00:00:00.000Z",
   "updated_at": "2026-07-11T00:00:00.000Z"
@@ -110,6 +116,7 @@ Supporting routes:
 - `/api/tasks/{id}/dependencies`
 - `/api/tasks/{id}/recurrence`
 - `/api/tasks/{id}/reminders`
+- `/api/tasks/{id}/comments`
 - `/api/tasks/statuses`
 - `/api/tasks/kanban-columns`
 - `/api/tasks/saved-filters`
@@ -121,8 +128,9 @@ Supporting routes:
 - `priority` must be one of `low`, `normal`, `high`, `urgent`.
 - Deadlines and reminders must be ISO datetime strings.
 - Assignee IDs must be positive integers.
-- Dependencies must point to tasks owned by the same JWT user.
+- Dependencies must point to tasks where the caller can contribute.
 - Self-dependencies and circular dependencies are rejected.
+- Soft-deleted tasks and comments are hidden from normal reads.
 
 ## Environment Variables
 
@@ -136,6 +144,7 @@ Supporting routes:
 | `POSTGRES_USER` | In Compose | DB user, defaults to `todo`. |
 | `POSTGRES_PASSWORD` | In Compose | DB password, defaults to `todo`. |
 | `TASK_SCHEMA_SYNC` | No | Local schema sync toggle. Use `false` in production. |
+| `WORKSPACE_SERVICE_BASE_URL` | In Compose | Internal workspace-service URL. |
 
 ## Persistence
 

@@ -8,6 +8,7 @@ public record AttachmentResponse(
         Long id,
         AttachmentTargetType targetType,
         Long targetId,
+        Long parentTaskId,
         String originalFilename,
         String contentType,
         Long sizeBytes,

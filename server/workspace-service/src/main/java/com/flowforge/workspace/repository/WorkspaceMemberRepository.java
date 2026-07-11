@@ -7,9 +7,11 @@ import java.util.List;
 import java.util.Optional;
 
 public interface WorkspaceMemberRepository extends JpaRepository<WorkspaceMember, Long> {
+    Optional<WorkspaceMember> findByWorkspaceIdAndUserIdAndRemovedAtIsNull(Long workspaceId, Long userId);
+
     Optional<WorkspaceMember> findByWorkspaceIdAndUserId(Long workspaceId, Long userId);
 
-    List<WorkspaceMember> findByWorkspaceIdOrderByJoinedAtAsc(Long workspaceId);
+    List<WorkspaceMember> findByWorkspaceIdAndRemovedAtIsNullOrderByJoinedAtAsc(Long workspaceId);
 
-    boolean existsByWorkspaceIdAndUserId(Long workspaceId, Long userId);
+    boolean existsByWorkspaceIdAndUserIdAndRemovedAtIsNull(Long workspaceId, Long userId);
 }

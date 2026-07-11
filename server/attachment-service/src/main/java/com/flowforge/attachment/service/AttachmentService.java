@@ -51,9 +51,31 @@ public class AttachmentService {
             Long userId,
             Long taskId,
             MultipartFile file,
+        String authorizationHeader
+    ) {
+        targetAccess.requireContribute(AttachmentTargetType.TASK, taskId, authorizationHeader);
+        return upload(userId, AttachmentTargetType.TASK, taskId, taskId, file);
+    }
+
+    @Transactional
+    public AttachmentResponse uploadCommentAttachment(
+            Long userId,
+            Long taskId,
+            Long commentId,
+            MultipartFile file,
             String authorizationHeader
     ) {
-        targetAccess.requireAccess(AttachmentTargetType.TASK, taskId, authorizationHeader);
+        targetAccess.requireCommentContribute(taskId, commentId, authorizationHeader);
+        return upload(userId, AttachmentTargetType.COMMENT, commentId, taskId, file);
+    }
+
+    private AttachmentResponse upload(
+            Long userId,
+            AttachmentTargetType targetType,
+            Long targetId,
+            Long parentTaskId,
+            MultipartFile file
+    ) {
         validateFile(file);
 
         var contentType = normalizedContentType(file);
@@ -63,8 +85,9 @@ public class AttachmentService {
             storage.upload(key, file, contentType);
             var attachment = new Attachment();
             attachment.setUploaderUserId(userId);
-            attachment.setTargetType(AttachmentTargetType.TASK);
-            attachment.setTargetId(taskId);
+            attachment.setTargetType(targetType);
+            attachment.setTargetId(targetId);
+            attachment.setParentTaskId(parentTaskId);
             attachment.setOriginalFilename(originalFilename);
             attachment.setStoredBlobKey(key);
             attachment.setContentType(contentType);
@@ -84,10 +107,21 @@ public class AttachmentService {
 
     @Transactional(readOnly = true)
     public List<AttachmentResponse> listTaskAttachments(Long taskId, String authorizationHeader) {
-        targetAccess.requireAccess(AttachmentTargetType.TASK, taskId, authorizationHeader);
+        targetAccess.requireView(AttachmentTargetType.TASK, taskId, authorizationHeader);
         return attachments.findByTargetTypeAndTargetIdAndDeletedAtIsNullOrderByCreatedAtDesc(
                         AttachmentTargetType.TASK,
                         taskId
+                ).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AttachmentResponse> listCommentAttachments(Long taskId, Long commentId, String authorizationHeader) {
+        targetAccess.requireCommentView(taskId, commentId, authorizationHeader);
+        return attachments.findByTargetTypeAndTargetIdAndDeletedAtIsNullOrderByCreatedAtDesc(
+                        AttachmentTargetType.COMMENT,
+                        commentId
                 ).stream()
                 .map(this::toResponse)
                 .toList();
@@ -111,16 +145,24 @@ public class AttachmentService {
     public void delete(Long userId, Long attachmentId, String authorizationHeader) {
         var attachment = findVisible(attachmentId, authorizationHeader);
         if (!attachment.getUploaderUserId().equals(userId)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the uploader can delete this attachment");
+            if (attachment.getTargetType() == AttachmentTargetType.TASK) {
+                targetAccess.requireAdmin(AttachmentTargetType.TASK, attachment.getTargetId(), authorizationHeader);
+            } else {
+                targetAccess.requireCommentAdmin(attachment.getParentTaskId(), attachment.getTargetId(), authorizationHeader);
+            }
         }
-        storage.delete(attachment.getStoredBlobKey());
         attachment.setDeletedAt(Instant.now());
+        attachment.setDeletedByUserId(userId);
     }
 
     private Attachment findVisible(Long attachmentId, String authorizationHeader) {
         var attachment = attachments.findByIdAndDeletedAtIsNull(attachmentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Attachment not found"));
-        targetAccess.requireAccess(attachment.getTargetType(), attachment.getTargetId(), authorizationHeader);
+        if (attachment.getTargetType() == AttachmentTargetType.TASK) {
+            targetAccess.requireView(AttachmentTargetType.TASK, attachment.getTargetId(), authorizationHeader);
+        } else {
+            targetAccess.requireCommentView(attachment.getParentTaskId(), attachment.getTargetId(), authorizationHeader);
+        }
         return attachment;
     }
 
@@ -152,6 +194,7 @@ public class AttachmentService {
                 attachment.getId(),
                 attachment.getTargetType(),
                 attachment.getTargetId(),
+                attachment.getParentTaskId(),
                 attachment.getOriginalFilename(),
                 attachment.getContentType(),
                 attachment.getSizeBytes(),

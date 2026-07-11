@@ -10,6 +10,7 @@ import type { Request } from 'express';
 
 export interface AuthUser {
   userId: number;
+  token: string;
 }
 
 interface AccessTokenPayload {
@@ -55,7 +56,7 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Token has no user_id claim');
     }
 
-    (request as Request & { user: AuthUser }).user = { userId };
+    (request as Request & { user: AuthUser }).user = { userId, token };
     return true;
   }
 }

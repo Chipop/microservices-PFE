@@ -49,6 +49,27 @@ public class AttachmentController {
         return service.listTaskAttachments(taskId, authorizationHeader);
     }
 
+    @PostMapping("/tasks/{taskId}/comments/{commentId}")
+    @ResponseStatus(HttpStatus.CREATED)
+    public AttachmentResponse uploadCommentAttachment(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long taskId,
+            @PathVariable Long commentId,
+            @RequestPart("file") MultipartFile file,
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String authorizationHeader
+    ) {
+        return service.uploadCommentAttachment(userId(jwt), taskId, commentId, file, authorizationHeader);
+    }
+
+    @GetMapping("/tasks/{taskId}/comments/{commentId}")
+    public List<AttachmentResponse> listCommentAttachments(
+            @PathVariable Long taskId,
+            @PathVariable Long commentId,
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String authorizationHeader
+    ) {
+        return service.listCommentAttachments(taskId, commentId, authorizationHeader);
+    }
+
     @GetMapping("/{attachmentId}")
     public AttachmentResponse get(
             @PathVariable Long attachmentId,
