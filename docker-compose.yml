@@ -91,6 +91,24 @@ services:
       retries: 10
     networks: [flowforge-platform-network]
 
+  notifications-db:
+    image: postgres:16-alpine
+    container_name: notifications-db
+    environment:
+      - POSTGRES_USER=todo
+      - POSTGRES_PASSWORD=todo
+      - POSTGRES_DB=notifications
+    volumes:
+      - notifications_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5438:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U todo -d notifications"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [flowforge-platform-network]
+
   user-service:
     build: ./server/user-service
     container_name: user-service
@@ -224,8 +242,27 @@ services:
         condition: service_started
     networks: [flowforge-platform-network]
 
+  notification-service:
+    build: ./server/notification-service
+    container_name: notification-service
+    environment:
+      - JWT_SIGNING_KEY=this-is-a-much-longer-shared-secret-key-32plus
+      - PORT=8000
+      - POSTGRES_HOST=notifications-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=notifications
+      - POSTGRES_USER=todo
+      - POSTGRES_PASSWORD=todo
+      - CORS_ALLOWED_ORIGINS=*
+    ports:
+      - "8006:8000"
+    depends_on:
+      notifications-db:
+        condition: service_healthy
+    networks: [flowforge-platform-network]
+
   # API Gateway — the single public entry point. Routes /api/auth, /api/profiles,
-  # /api/tasks, /api/workspaces and /api/attachments to the right service.
+  # /api/tasks, /api/workspaces, /api/attachments and /api/notifications to the right service.
   api-gateway:
     image: nginx:alpine
     container_name: api-gateway
@@ -239,6 +276,7 @@ services:
       - task-service
       - workspace-service
       - attachment-service
+      - notification-service
     networks: [flowforge-platform-network]
 
   frontend:
@@ -259,6 +297,7 @@ volumes:
   tasks_pgdata:
   workspaces_pgdata:
   attachments_pgdata:
+  notifications_pgdata:
 
 networks:
   flowforge-platform-network:

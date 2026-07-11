@@ -24,6 +24,7 @@ AUTH     = "http://localhost:8002/api/auth"
 PROFILES = "http://localhost:8001/api/profiles"
 TASKS    = "http://localhost:8003/api/tasks"
 WORKSPACES = "http://localhost:8004/api/workspaces"
+NOTIFICATIONS = "http://localhost:8006/api/notifications"
 
 INTERNAL_KEY = "INTERNAL-CHANGE-ME"   # must equal INTERNAL_API_KEY in compose
 
@@ -97,13 +98,23 @@ def main():
           detail=f"got {r.status_code if r else 'no response'}")
 
     # -----------------------------------------------------------------------
-    section("3. TASKS — JWT is required (the core cross-service proof)")
+    section("3. TASKS / NOTIFICATIONS — JWT is required")
     # -----------------------------------------------------------------------
     # No token -> must be rejected
     r = safe("post", f"{TASKS}/", json={"title": "should fail"})
     check("create task WITHOUT token is rejected (401)",
           r is not None and r.status_code == 401,
           detail=f"got {r.status_code if r else 'no response'}")
+
+    r = safe("get", f"{NOTIFICATIONS}")
+    check("list notifications WITHOUT token is rejected (401)",
+          r is not None and r.status_code == 401,
+          detail=f"got {r.status_code if r else 'no response'}")
+
+    r = safe("get", f"{NOTIFICATIONS}/unread-count", headers=auth_header)
+    check("notification unread count WITH token returns 200",
+          r is not None and r.status_code == 200 and "count" in r.json(),
+          detail=f"got {r.status_code if r else 'no response'}: {r.text if r else ''}")
 
     # With token -> created, scoped to this user
     r = safe("post", f"{TASKS}/", headers=auth_header, json={"title": "first task"})
