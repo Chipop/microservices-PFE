@@ -146,61 +146,17 @@ If 2FA is enabled but no code is supplied, login returns HTTP 202:
 
 ## Inter-Service Communication
 
-On registration, the service posts to `user-service`:
-
-```text
-http://api-gateway/api/profiles/
-```
-
-Payload:
-
-```json
-{
-  "auth_user_id": 1,
-  "username": "alice",
-  "email": "alice@example.com"
-}
-```
-
-Header:
-
-```text
-X-Internal-Key: <INTERNAL_API_KEY>
-```
-
-This keeps `auth-service` from calling `user-service` directly and preserves gateway routing as the internal reception path.
-
-It also posts to `workspace-service`:
-
-```text
-http://api-gateway/api/workspaces/internal/personal
-```
-
-Payload:
-
-```json
-{
-  "authUserId": 1,
-  "username": "alice"
-}
-```
-
-Header:
-
-```text
-X-Internal-Key: <INTERNAL_API_KEY>
-```
-
-That endpoint is idempotent and ensures each registered user has a private
-personal workspace.
+On registration, the service publishes `user.registered` to RabbitMQ. Downstream
+consumers provision the user profile, personal workspace, and welcome email from
+that event. `auth-service` does not call profile or workspace provisioning
+endpoints directly.
 
 ## Environment Variables
 
 | Variable | Required | Purpose |
 |---|---:|---|
 | `JWT_SIGNING_KEY` | Yes | HS256 signing key used by all JWT validators. |
-| `INTERNAL_API_KEY` | Yes | Shared internal key for profile creation. |
-| `GATEWAY_URL` | No | Defaults to `http://api-gateway`. |
+| `INTERNAL_API_KEY` | Yes | Shared internal key for internal APIs in this platform. |
 | `POSTGRES_HOST` | In Compose | Enables Postgres instead of SQLite. |
 | `POSTGRES_PORT` | In Compose | DB port, defaults to `5432`. |
 | `POSTGRES_DB` | In Compose | DB name, defaults to `auth`. |

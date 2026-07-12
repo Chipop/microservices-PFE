@@ -1,6 +1,3 @@
-import os
-
-import requests
 from django.conf import settings
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -55,32 +52,6 @@ class RegisterView(generics.CreateAPIView):
                 "email": user.email,
             },
         )
-        gateway = os.environ.get("GATEWAY_URL", "http://api-gateway")
-        try:
-            requests.post(
-                f"{gateway}/api/profiles/",
-                json={
-                    "auth_user_id": user.id,
-                    "username": user.username,
-                    "email": user.email,
-                },
-                headers={"X-Internal-Key": os.environ.get("INTERNAL_API_KEY")},
-                timeout=3,
-            )
-        except requests.RequestException:
-            pass
-        try:
-            requests.post(
-                f"{gateway}/api/workspaces/internal/personal",
-                json={
-                    "authUserId": user.id,
-                    "username": user.username,
-                },
-                headers={"X-Internal-Key": os.environ.get("INTERNAL_API_KEY")},
-                timeout=3,
-            )
-        except requests.RequestException:
-            pass
 
 
 class LoginView(APIView):
