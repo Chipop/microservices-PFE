@@ -39,12 +39,13 @@ management:
 events:
   exchange: ${RABBITMQ_EXCHANGE:flowforge.events}
   queue: ${EMAIL_QUEUE:email-service.events}
+  dead-letter-exchange: ${EMAIL_DLX:email-service.events.dlx}
+  dead-letter-queue: ${EMAIL_DLQ:email-service.events.dlq}
+  dead-letter-routing-key: ${EMAIL_DLQ_ROUTING_KEY:email-service.events.failed}
+  max-attempts: ${EMAIL_MAX_ATTEMPTS:3}
+  retry-backoff-ms: ${EMAIL_RETRY_BACKOFF_MS:1000}
   routing-keys:
     - user.registered
-    - password_reset.requested
-    - workspace.invitation
-    - task.assigned
-    - task.deadline_approaching
     - task.weekly_summary
 
 rabbitmq:

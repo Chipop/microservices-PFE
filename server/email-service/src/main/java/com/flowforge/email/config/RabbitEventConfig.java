@@ -1,18 +1,28 @@
 package com.flowforge.email.config;
 
+import org.springframework.amqp.core.AcknowledgeMode;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.Declarables;
+import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.QueueBuilder;
 import org.springframework.amqp.core.TopicExchange;
+import org.springframework.amqp.rabbit.config.RetryInterceptorBuilder;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.rabbit.retry.RepublishMessageRecoverer;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.retry.interceptor.RetryOperationsInterceptor;
+
+import java.util.stream.Stream;
 
 @Configuration
 public class RabbitEventConfig {
@@ -29,20 +39,38 @@ public class RabbitEventConfig {
     }
 
     @Bean
+    DirectExchange emailDeadLetterExchange(EventConsumerProperties properties) {
+        return new DirectExchange(properties.deadLetterExchange(), true, false);
+    }
+
+    @Bean
     Queue emailEventsQueue(EventConsumerProperties properties) {
-        return new Queue(properties.queue(), true);
+        return QueueBuilder.durable(properties.queue())
+                .deadLetterExchange(properties.deadLetterExchange())
+                .deadLetterRoutingKey(properties.deadLetterRoutingKey())
+                .build();
+    }
+
+    @Bean
+    Queue emailDeadLetterQueue(EventConsumerProperties properties) {
+        return QueueBuilder.durable(properties.deadLetterQueue()).build();
     }
 
     @Bean
     Declarables emailEventBindings(
-            Queue emailEventsQueue,
+            @Qualifier("emailEventsQueue") Queue emailEventsQueue,
+            @Qualifier("emailDeadLetterQueue") Queue emailDeadLetterQueue,
             TopicExchange domainEventsExchange,
+            DirectExchange emailDeadLetterExchange,
             EventConsumerProperties properties
     ) {
         var bindings = properties.routingKeys().stream()
                 .map(routingKey -> BindingBuilder.bind(emailEventsQueue).to(domainEventsExchange).with(routingKey))
                 .toList();
-        return new Declarables(bindings.toArray(Binding[]::new));
+        var dlqBinding = BindingBuilder.bind(emailDeadLetterQueue)
+                .to(emailDeadLetterExchange)
+                .with(properties.deadLetterRoutingKey());
+        return new Declarables(Stream.concat(bindings.stream(), Stream.of(dlqBinding)).toArray(Binding[]::new));
     }
 
     @Bean
@@ -51,14 +79,33 @@ public class RabbitEventConfig {
     }
 
     @Bean
+    RetryOperationsInterceptor emailRetryInterceptor(
+            RabbitTemplate rabbitTemplate,
+            EventConsumerProperties properties
+    ) {
+        return RetryInterceptorBuilder.stateless()
+                .maxAttempts(properties.maxAttempts())
+                .backOffOptions(properties.retryBackoffMs(), 2.0, properties.retryBackoffMs() * 10)
+                .recoverer(new RepublishMessageRecoverer(
+                        rabbitTemplate,
+                        properties.deadLetterExchange(),
+                        properties.deadLetterRoutingKey()
+                ))
+                .build();
+    }
+
+    @Bean
     SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
             ConnectionFactory connectionFactory,
-            MessageConverter jsonMessageConverter
+            MessageConverter jsonMessageConverter,
+            RetryOperationsInterceptor emailRetryInterceptor
     ) {
         var factory = new SimpleRabbitListenerContainerFactory();
         factory.setConnectionFactory(connectionFactory);
         factory.setMessageConverter(jsonMessageConverter);
+        factory.setAcknowledgeMode(AcknowledgeMode.AUTO);
         factory.setDefaultRequeueRejected(false);
+        factory.setAdviceChain(emailRetryInterceptor);
         return factory;
     }
 }

@@ -10,17 +10,12 @@ frontend pages.
 ## Consumed Events
 
 - `user.registered`
-- `password_reset.requested`
-- `workspace.invitation`
-- `task.assigned`
-- `task.deadline_approaching`
 - `task.weekly_summary`
 
-Events that do not include a usable recipient email are acknowledged and stored
-as permanently failed delivery records so they do not block the shared broker.
-Password-reset and workspace-invitation emails also require a reset/invitation
-link or token in the event payload; otherwise they are recorded as permanent
-failures instead of sending unusable action emails.
+The service only binds to events that include a usable recipient email and any
+required action data. Password-reset and workspace-invitation tokens are not
+published on the shared domain event bus, so those emails remain owned by the
+source workflow until a dedicated command/API contract exists.
 
 ## Environment
 
@@ -35,6 +30,8 @@ failures instead of sending unusable action emails.
 | `RABBITMQ_URL` | AMQP URL. |
 | `RABBITMQ_EXCHANGE` | Topic exchange, defaults to `flowforge.events`. |
 | `EMAIL_QUEUE` | Queue name, defaults to `email-service.events`. |
+| `EMAIL_DLX` | Dead-letter exchange, defaults to `email-service.events.dlx`. |
+| `EMAIL_DLQ` | Dead-letter queue, defaults to `email-service.events.dlq`. |
 | `SMTP_HOST` | SMTP server host. |
 | `SMTP_PORT` | SMTP server port. |
 | `SMTP_USERNAME` | SMTP username. |

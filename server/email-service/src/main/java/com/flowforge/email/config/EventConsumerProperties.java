@@ -8,6 +8,11 @@ import java.util.List;
 public record EventConsumerProperties(
         String exchange,
         String queue,
+        String deadLetterExchange,
+        String deadLetterQueue,
+        String deadLetterRoutingKey,
+        int maxAttempts,
+        long retryBackoffMs,
         List<String> routingKeys
 ) {
 }
