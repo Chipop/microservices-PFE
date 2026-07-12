@@ -14,7 +14,7 @@ import {
   TaskStatus,
   TaskTag,
 } from './entities/task.entity';
-import { TasksController } from './tasks.controller';
+import { InternalTasksController, TasksController } from './tasks.controller';
 import { TasksService } from './tasks.service';
 import { DomainEventPublisher } from '../events/domain-event.publisher';
 
@@ -35,7 +35,7 @@ import { DomainEventPublisher } from '../events/domain-event.publisher';
       SavedFilter,
     ]),
   ],
-  controllers: [TasksController],
+  controllers: [TasksController, InternalTasksController],
   providers: [TasksService, DomainEventPublisher],
 })
 export class TasksModule {}

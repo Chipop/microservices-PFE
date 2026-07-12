@@ -90,6 +90,11 @@ export interface TaskCommentResponse {
   updated_at: Date;
 }
 
+export interface SearchSnapshotPage {
+  items: Array<Record<string, unknown>>;
+  hasNext: boolean;
+}
+
 interface WorkspacePermission {
   workspaceId: number;
   visibility: 'PRIVATE' | 'PUBLIC';
@@ -197,11 +202,7 @@ export class TasksService {
       eventType: 'task.created',
       actorUserId: userId,
       resource: { type: 'task', id: response.id },
-      data: {
-        taskId: response.id,
-        workspaceId: response.workspace_id,
-        title: response.title,
-      },
+      data: this.searchableTaskEventData(response),
     });
     return response;
   }
@@ -242,11 +243,7 @@ export class TasksService {
       eventType: 'task.updated',
       actorUserId: userId,
       resource: { type: 'task', id: response.id },
-      data: {
-        taskId: response.id,
-        workspaceId: response.workspace_id,
-        title: response.title,
-      },
+      data: this.searchableTaskEventData(response),
     });
     if (!wasCompleted && response.done) {
       await this.events.publish({
@@ -256,7 +253,12 @@ export class TasksService {
         data: {
           taskId: response.id,
           workspaceId: response.workspace_id,
+          ownerUserId: response.author_user_id,
           title: response.title,
+          viewerUserIds: [
+            response.author_user_id,
+            ...response.assignments.map((assignment) => assignment.assignee_user_id),
+          ],
           completedAt: response.completed_at,
         },
       });
@@ -270,6 +272,15 @@ export class TasksService {
     task.deleted_at = new Date();
     task.deleted_by_user_id = user.userId;
     await this.tasks.save(task);
+    await this.events.publish({
+      eventType: 'task.deleted',
+      actorUserId: user.userId,
+      resource: { type: 'task', id },
+      data: {
+        taskId: id,
+        workspaceId: task.workspace_id,
+      },
+    });
   }
 
   async complete(user: { userId: number; token: string }, id: number): Promise<TaskResponse> {
@@ -282,7 +293,14 @@ export class TasksService {
     task.status_id = status.id;
     task.archived_at = task.archived_at ?? new Date();
     await this.tasks.save(task);
-    return this.findOne(user, id);
+    const response = await this.findOne(user, id);
+    await this.events.publish({
+      eventType: 'task.updated',
+      actorUserId: user.userId,
+      resource: { type: 'task', id },
+      data: this.searchableTaskEventData(response),
+    });
+    return response;
   }
 
   async addAssignment(user: { userId: number; token: string }, taskId: number, dto: AssignTaskDto) {
@@ -295,6 +313,7 @@ export class TasksService {
     });
     try {
       const assignment = await this.assignments.save(row);
+      const response = await this.findOne(user, taskId);
       await this.events.publish({
         eventType: 'task.assigned',
         actorUserId: user.userId,
@@ -305,6 +324,12 @@ export class TasksService {
           assigneeUserId: dto.assignee_user_id,
           assignedByUserId: user.userId,
         },
+      });
+      await this.events.publish({
+        eventType: 'task.updated',
+        actorUserId: user.userId,
+        resource: { type: 'task', id: taskId },
+        data: this.searchableTaskEventData(response),
       });
       return assignment;
     } catch {
@@ -319,6 +344,13 @@ export class TasksService {
     });
     if (!row) throw new NotFoundException('Assignment not found');
     await this.assignments.remove(row);
+    const response = await this.findOne(user, taskId);
+    await this.events.publish({
+      eventType: 'task.updated',
+      actorUserId: user.userId,
+      resource: { type: 'task', id: taskId },
+      data: this.searchableTaskEventData(response),
+    });
   }
 
   async addTag(user: { userId: number; token: string }, taskId: number, dto: AddTagDto) {
@@ -333,7 +365,14 @@ export class TasksService {
     } catch {
       throw new ConflictException('Tag is already attached to this task.');
     }
-    return this.findOne(user, taskId);
+    const response = await this.findOne(user, taskId);
+    await this.events.publish({
+      eventType: 'task.updated',
+      actorUserId: user.userId,
+      resource: { type: 'task', id: taskId },
+      data: this.searchableTaskEventData(response),
+    });
+    return response;
   }
 
   async removeTag(user: { userId: number; token: string }, taskId: number, tagId: number): Promise<void> {
@@ -341,6 +380,13 @@ export class TasksService {
     const row = await this.taskTags.findOne({ where: { task_id: taskId, tag_id: tagId } });
     if (!row) throw new NotFoundException('Task tag not found');
     await this.taskTags.remove(row);
+    const response = await this.findOne(user, taskId);
+    await this.events.publish({
+      eventType: 'task.updated',
+      actorUserId: user.userId,
+      resource: { type: 'task', id: taskId },
+      data: this.searchableTaskEventData(response),
+    });
   }
 
   async createSubtask(user: { userId: number; token: string }, taskId: number, dto: CreateSubtaskDto) {
@@ -518,13 +564,20 @@ export class TasksService {
     taskId: number,
     dto: CreateCommentDto,
   ): Promise<TaskCommentResponse> {
-    await this.getContributableTask(user, taskId);
+    const task = await this.getContributableTask(user, taskId);
     const comment = this.comments.create({
       task_id: taskId,
       author_user_id: user.userId,
       body: dto.body,
     });
-    return this.toCommentResponse(await this.comments.save(comment));
+    const response = this.toCommentResponse(await this.comments.save(comment));
+    await this.events.publish({
+      eventType: 'task.comment.created',
+      actorUserId: user.userId,
+      resource: { type: 'comment', id: response.id },
+      data: this.searchableCommentEventData(response, task),
+    });
+    return response;
   }
 
   async updateComment(
@@ -533,13 +586,20 @@ export class TasksService {
     commentId: number,
     dto: UpdateCommentDto,
   ): Promise<TaskCommentResponse> {
-    await this.getVisibleTask(user, taskId);
+    const task = await this.getVisibleTask(user, taskId);
     const comment = await this.getVisibleComment(taskId, commentId);
     if (comment.author_user_id !== user.userId) {
       throw new ForbiddenException('Only the comment author can update this comment.');
     }
     if (dto.body !== undefined) comment.body = dto.body;
-    return this.toCommentResponse(await this.comments.save(comment));
+    const response = this.toCommentResponse(await this.comments.save(comment));
+    await this.events.publish({
+      eventType: 'task.comment.updated',
+      actorUserId: user.userId,
+      resource: { type: 'comment', id: response.id },
+      data: this.searchableCommentEventData(response, task),
+    });
+    return response;
   }
 
   async removeComment(user: { userId: number; token: string }, taskId: number, commentId: number): Promise<void> {
@@ -549,6 +609,50 @@ export class TasksService {
     comment.deleted_at = new Date();
     comment.deleted_by_user_id = user.userId;
     await this.comments.save(comment);
+    await this.events.publish({
+      eventType: 'task.comment.deleted',
+      actorUserId: user.userId,
+      resource: { type: 'comment', id: commentId },
+      data: {
+        commentId,
+        taskId,
+        workspaceId: task.workspace_id,
+      },
+    });
+  }
+
+  async taskSearchSnapshots(page: number, size: number): Promise<SearchSnapshotPage> {
+    const safePage = Math.max(page, 0);
+    const safeSize = Math.min(Math.max(size, 1), 200);
+    const rows = await this.tasks.find({
+      where: { deleted_at: IsNull() },
+      relations: this.taskRelations(),
+      order: { id: 'ASC' },
+      skip: safePage * safeSize,
+      take: safeSize,
+    });
+    return {
+      items: rows.map((task) => this.searchableTaskDocument(task)),
+      hasNext: rows.length === safeSize,
+    };
+  }
+
+  async commentSearchSnapshots(page: number, size: number): Promise<SearchSnapshotPage> {
+    const safePage = Math.max(page, 0);
+    const safeSize = Math.min(Math.max(size, 1), 200);
+    const rows = await this.comments.find({
+      where: { deleted_at: IsNull() },
+      relations: { task: { status: true, assignments: true } },
+      order: { id: 'ASC' },
+      skip: safePage * safeSize,
+      take: safeSize,
+    });
+    return {
+      items: rows
+        .filter((comment) => comment.task && !comment.task.deleted_at)
+        .map((comment) => this.searchableCommentDocument(comment, comment.task)),
+      hasNext: rows.length === safeSize,
+    };
   }
 
   async commentPermission(user: { userId: number; token: string }, taskId: number, commentId: number) {
@@ -644,6 +748,59 @@ export class TasksService {
       body: comment.body,
       created_at: comment.created_at,
       updated_at: comment.updated_at,
+    };
+  }
+
+  private searchableTaskEventData(task: TaskResponse): Record<string, unknown> {
+    return {
+      taskId: task.id,
+      resourceId: task.id,
+      workspaceId: task.workspace_id,
+      authorUserId: task.author_user_id,
+      ownerUserId: task.author_user_id,
+      title: task.title,
+      description: task.description,
+      status: task.status?.slug,
+      statusName: task.status?.name,
+      priority: task.priority,
+      tags: task.tags.map((tag) => tag.name),
+      viewerUserIds: [
+        task.author_user_id,
+        ...task.assignments.map((assignment) => assignment.assignee_user_id),
+      ],
+      updatedAt: task.updated_at,
+    };
+  }
+
+  private searchableTaskDocument(task: Task): Record<string, unknown> {
+    const response = this.toResponse(task);
+    return {
+      type: 'task',
+      ...this.searchableTaskEventData(response),
+    };
+  }
+
+  private searchableCommentEventData(comment: TaskCommentResponse, task: Task): Record<string, unknown> {
+    return {
+      commentId: comment.id,
+      resourceId: comment.id,
+      taskId: comment.task_id,
+      workspaceId: task.workspace_id,
+      authorUserId: comment.author_user_id,
+      body: comment.body,
+      viewerUserIds: [
+        task.author_user_id ?? task.owner_user_id,
+        comment.author_user_id,
+        ...(task.assignments ?? []).map((assignment) => assignment.assignee_user_id),
+      ],
+      updatedAt: comment.updated_at,
+    };
+  }
+
+  private searchableCommentDocument(comment: TaskComment, task: Task): Record<string, unknown> {
+    return {
+      type: 'comment',
+      ...this.searchableCommentEventData(this.toCommentResponse(comment), task),
     };
   }
 

@@ -18,6 +18,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -69,11 +70,7 @@ public class WorkspaceService {
         owner.setRole(WorkspaceRole.OWNER);
         members.save(owner);
 
-        events.publish("workspace.created", "workspace", workspace.getId(), userId, Map.of(
-                "workspaceId", workspace.getId(),
-                "workspaceType", workspace.getWorkspaceType().name(),
-                "name", workspace.getName()
-        ));
+        events.publish("workspace.created", "workspace", workspace.getId(), userId, searchableWorkspaceDocument(workspace));
         return toResponse(workspace, owner);
     }
 
@@ -94,6 +91,7 @@ public class WorkspaceService {
         if (request.publicContributionsEnabled() != null) {
             workspace.setPublicContributionsEnabled(request.publicContributionsEnabled());
         }
+        events.publish("workspace.updated", "workspace", workspaceId, userId, searchableWorkspaceDocument(workspace));
         return toResponse(workspace, requireMember(workspaceId, userId));
     }
 
@@ -113,6 +111,9 @@ public class WorkspaceService {
         requireOwner(workspaceId, userId);
         workspace.setDeletedAt(Instant.now());
         workspace.setDeletedByUserId(userId);
+        events.publish("workspace.deleted", "workspace", workspaceId, userId, Map.of(
+                "workspaceId", workspaceId
+        ));
     }
 
     @Transactional(readOnly = true)
@@ -142,6 +143,7 @@ public class WorkspaceService {
                 "targetUserId", targetUserId,
                 "role", request.role().name()
         ));
+        publishWorkspaceAccessUpdated(workspace, userId);
         return toMemberResponse(target);
     }
 
@@ -156,6 +158,7 @@ public class WorkspaceService {
         }
         target.setRemovedAt(Instant.now());
         target.setRemovedByUserId(userId);
+        publishWorkspaceAccessUpdated(workspace, userId);
     }
 
     @Transactional
@@ -178,6 +181,8 @@ public class WorkspaceService {
                 "targetUserId", newOwner.getUserId(),
                 "role", WorkspaceRole.OWNER.name()
         ));
+        events.publish("workspace.updated", "workspace", workspaceId, userId, searchableWorkspaceDocument(workspace));
+        publishWorkspaceAccessUpdated(workspace, userId);
         return toResponse(workspace, currentOwner);
     }
 
@@ -239,6 +244,7 @@ public class WorkspaceService {
         invitation.setInvitedUserId(userId);
         invitation.setStatus(InvitationStatus.ACCEPTED);
         invitation.setRespondedAt(Instant.now());
+        publishWorkspaceAccessUpdated(workspace, userId);
         return toInvitationResponse(invitation, null);
     }
 
@@ -352,12 +358,23 @@ public class WorkspaceService {
         owner.setUserId(userId);
         owner.setRole(WorkspaceRole.OWNER);
         members.save(owner);
-        events.publish("workspace.created", "workspace", workspace.getId(), userId, Map.of(
-                "workspaceId", workspace.getId(),
-                "workspaceType", workspace.getWorkspaceType().name(),
-                "name", workspace.getName()
-        ));
+        events.publish("workspace.created", "workspace", workspace.getId(), userId, searchableWorkspaceDocument(workspace));
         return workspace;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> searchSnapshots(int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 200);
+        var pageable = org.springframework.data.domain.PageRequest.of(safePage, safeSize);
+        var rows = workspaces.findAll(pageable);
+        return Map.of(
+                "items", rows.stream()
+                        .filter(workspace -> workspace.getDeletedAt() == null)
+                        .map(this::searchableWorkspaceDocument)
+                        .toList(),
+                "hasNext", rows.hasNext()
+        );
     }
 
     private WorkspaceResponse toResponse(Workspace workspace, WorkspaceMember member) {
@@ -379,6 +396,28 @@ public class WorkspaceService {
                 permission.canContribute(),
                 permission.canAdmin()
         );
+    }
+
+    private void publishWorkspaceAccessUpdated(Workspace workspace, Long actorUserId) {
+        events.publish("workspace.access_updated", "workspace", workspace.getId(), actorUserId, searchableWorkspaceDocument(workspace));
+    }
+
+    private Map<String, Object> searchableWorkspaceDocument(Workspace workspace) {
+        var document = new LinkedHashMap<String, Object>();
+        document.put("type", "workspace");
+        document.put("workspaceId", workspace.getId());
+        document.put("resourceId", workspace.getId());
+        document.put("name", workspace.getName());
+        document.put("title", workspace.getName());
+        document.put("description", workspace.getDescription());
+        document.put("ownerUserId", workspace.getOwnerUserId());
+        document.put("visibility", workspace.getVisibility().name());
+        document.put("workspaceType", workspace.getWorkspaceType().name());
+        document.put("memberUserIds", members.findByWorkspaceIdAndRemovedAtIsNullOrderByJoinedAtAsc(workspace.getId()).stream()
+                .map(WorkspaceMember::getUserId)
+                .toList());
+        document.put("updatedAt", workspace.getUpdatedAt());
+        return document;
     }
 
     private WorkspacePermissionResponse toPermissionResponse(Workspace workspace, WorkspaceMember member) {

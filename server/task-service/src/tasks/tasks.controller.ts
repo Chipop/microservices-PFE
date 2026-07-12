@@ -2,7 +2,9 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
+  Headers,
   HttpCode,
   Param,
   ParseIntPipe,
@@ -12,6 +14,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthUser } from '../auth/jwt-auth.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -329,5 +332,40 @@ export class TasksController {
     @Param('commentId', ParseIntPipe) commentId: number,
   ) {
     return this.tasksService.commentPermission(user, id, commentId);
+  }
+}
+
+@Controller('tasks/internal')
+export class InternalTasksController {
+  constructor(
+    private readonly tasksService: TasksService,
+    private readonly config: ConfigService,
+  ) {}
+
+  @Get('search-snapshots')
+  taskSearchSnapshots(
+    @Headers('x-internal-key') internalKey: string | undefined,
+    @Query('page') page = '0',
+    @Query('size') size = '200',
+  ) {
+    this.requireInternalKey(internalKey);
+    return this.tasksService.taskSearchSnapshots(Number(page), Number(size));
+  }
+
+  @Get('comment-search-snapshots')
+  commentSearchSnapshots(
+    @Headers('x-internal-key') internalKey: string | undefined,
+    @Query('page') page = '0',
+    @Query('size') size = '200',
+  ) {
+    this.requireInternalKey(internalKey);
+    return this.tasksService.commentSearchSnapshots(Number(page), Number(size));
+  }
+
+  private requireInternalKey(internalKey: string | undefined) {
+    const expected = this.config.get<string>('INTERNAL_API_KEY');
+    if (!expected || internalKey !== expected) {
+      throw new ForbiddenException('Invalid internal API key.');
+    }
   }
 }

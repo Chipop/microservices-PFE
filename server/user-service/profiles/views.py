@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.authentication import JWTTokenUserAuthentication
 
 from .models import Profile
+from .events import publish_domain_event
 from .permissions import HasValidToken, IsInternalService
 from .serializers import (
     InternalProfileCreateSerializer,
@@ -14,19 +15,21 @@ from .serializers import (
     ProfileUpdateSerializer,
     PublicProfileSerializer,
 )
-from .services import delete_profile_picture, upload_profile_picture
+from .services import delete_profile_picture, profile_picture_url, upload_profile_picture
 
 
 class ProfileViewSet(viewsets.ModelViewSet):
     serializer_class = ProfileSerializer
 
     def get_authenticators(self):
-        if getattr(self, "action", None) in {"create", "public"}:
+        if getattr(self, "action", None) in {"create", "public", "search_snapshots"}:
             return []
         return [JWTTokenUserAuthentication()]
 
     def get_permissions(self):
         if self.action == "create":
+            return [IsInternalService()]
+        if self.action == "search_snapshots":
             return [IsInternalService()]
         if self.action == "public":
             return [AllowAny()]
@@ -53,7 +56,24 @@ class ProfileViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        publish_domain_event(
+            "user.profile.updated",
+            "user",
+            instance.auth_user_id,
+            actor_user_id=instance.auth_user_id,
+            data=search_document(instance),
+        )
         return Response(ProfileSerializer(instance).data)
+
+    def perform_create(self, serializer):
+        profile = serializer.save()
+        publish_domain_event(
+            "user.profile.created",
+            "user",
+            profile.auth_user_id,
+            actor_user_id=profile.auth_user_id,
+            data=search_document(profile),
+        )
 
     @action(detail=False, methods=["get"], url_path=r"public/(?P<username>[^/.]+)")
     def public(self, request, username=None):
@@ -71,9 +91,51 @@ class ProfileViewSet(viewsets.ModelViewSet):
 
         if request.method == "DELETE":
             delete_profile_picture(profile)
+            publish_domain_event(
+                "user.profile.updated",
+                "user",
+                profile.auth_user_id,
+                actor_user_id=profile.auth_user_id,
+                data=search_document(profile),
+            )
             return Response(status=status.HTTP_204_NO_CONTENT)
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         profile = upload_profile_picture(profile, serializer.validated_data["file"])
+        publish_domain_event(
+            "user.profile.updated",
+            "user",
+            profile.auth_user_id,
+            actor_user_id=profile.auth_user_id,
+            data=search_document(profile),
+        )
         return Response(ProfileSerializer(profile).data)
+
+    @action(detail=False, methods=["get"], url_path="internal/search-snapshots")
+    def search_snapshots(self, request):
+        page = max(int(request.query_params.get("page", "0")), 0)
+        size = min(max(int(request.query_params.get("size", "200")), 1), 200)
+        offset = page * size
+        queryset = Profile.objects.order_by("id")
+        rows = list(queryset[offset:offset + size])
+        return Response({
+            "items": [search_document(profile) for profile in rows],
+            "hasNext": len(rows) == size,
+        })
+
+
+def search_document(profile):
+    return {
+        "type": "user",
+        "resourceId": profile.auth_user_id,
+        "authUserId": profile.auth_user_id,
+        "username": profile.username,
+        "title": profile.username,
+        "biography": profile.biography,
+        "description": profile.biography,
+        "timezone": profile.timezone,
+        "language": profile.language,
+        "profilePictureUrl": profile_picture_url(profile),
+        "updatedAt": profile.updated_at,
+    }

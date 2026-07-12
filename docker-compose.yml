@@ -143,12 +143,16 @@ services:
       - PROFILE_PICTURE_ALLOWED_CONTENT_TYPES=image/jpeg,image/png,image/webp
       - PROFILE_PICTURE_SIGNED_URL_TTL_SECONDS=900
       - PROFILE_PICTURE_KEY_PREFIX=profile-pictures
+      - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
+      - RABBITMQ_EXCHANGE=flowforge.events
     volumes:
       - ./server/user-service:/app
     ports:
       - "8001:8000"
     depends_on:
       users-db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     networks: [flowforge-platform-network]
 
@@ -202,6 +206,7 @@ services:
       - POSTGRES_USER=todo
       - POSTGRES_PASSWORD=todo
       - TASK_SCHEMA_SYNC=true
+      - INTERNAL_API_KEY=INTERNAL-CHANGE-ME
       - WORKSPACE_SERVICE_BASE_URL=http://workspace-service:8000
       - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
     ports:
@@ -280,10 +285,15 @@ services:
       - POSTGRES_USER=todo
       - POSTGRES_PASSWORD=todo
       - CORS_ALLOWED_ORIGINS=*
+      - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
+      - RABBITMQ_EXCHANGE=flowforge.events
+      - NOTIFICATION_QUEUE=notification-service.events
     ports:
       - "8006:8000"
     depends_on:
       notifications-db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     networks: [flowforge-platform-network]
 
@@ -318,6 +328,30 @@ services:
         condition: service_healthy
     networks: [flowforge-platform-network]
 
+  search-service:
+    build: ./server/search-service
+    container_name: search-service
+    environment:
+      - JWT_SIGNING_KEY=this-is-a-much-longer-shared-secret-key-32plus
+      - INTERNAL_API_KEY=INTERNAL-CHANGE-ME
+      - PORT=8000
+      - CORS_ALLOWED_ORIGINS=*
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
+      - RABBITMQ_EXCHANGE=flowforge.events
+      - SEARCH_QUEUE=search-service.events
+      - TASK_SERVICE_BASE_URL=http://task-service:8000
+      - WORKSPACE_SERVICE_BASE_URL=http://workspace-service:8000
+      - USER_SERVICE_BASE_URL=http://user-service:8000
+    ports:
+      - "8008:8000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    networks: [flowforge-platform-network]
+
   api-gateway:
     image: nginx:alpine
     container_name: api-gateway
@@ -333,6 +367,7 @@ services:
       - attachment-service
       - notification-service
       - email-service
+      - search-service
     networks: [flowforge-platform-network]
 
   frontend:
@@ -376,6 +411,26 @@ services:
 
     restart: unless-stopped
 
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: flowforge-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - flowforge-platform-network
+
 volumes:
   auth_pgdata:
   users_pgdata:
@@ -385,6 +440,7 @@ volumes:
   notifications_pgdata:
   emails_pgdata:
   rabbitmq_data:
+  elasticsearch_data:
 
 networks:
   flowforge-platform-network:

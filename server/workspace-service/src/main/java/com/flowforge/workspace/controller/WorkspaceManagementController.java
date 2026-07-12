@@ -79,6 +79,16 @@ public class WorkspaceManagementController {
         return service.ensurePersonalWorkspace(request.authUserId(), request.username());
     }
 
+    @GetMapping("/internal/search-snapshots")
+    public Object searchSnapshots(
+            @RequestHeader(value = "X-Internal-Key", required = false) String internalKey,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "200") int size
+    ) {
+        service.validateInternalKey(internalKey);
+        return service.searchSnapshots(page, size);
+    }
+
     private Long userId(Jwt jwt) {
         Object raw = jwt.getClaim("user_id");
         if (raw instanceof Number number) return number.longValue();
