@@ -4,7 +4,7 @@ A task management application built to demonstrate a **microservices architectur
 five independent services under `server/` — two in **Django** (auth, profiles),
 one in **NestJS** (tasks), and two in **Spring Boot** (workspaces, attachments) — behind an
 **nginx API gateway**, **each with its own
-PostgreSQL database** (database-per-service), with a **Quasar (Vue 3)**
+PostgreSQL database** (database-per-service), with a **Vue 3 + Vite**
 single-page frontend.
 
 ```
@@ -38,7 +38,7 @@ single-page frontend.
 
 | Layer | Stack |
 |-------|-------|
-| **Frontend** | Quasar 2 (Vue 3, `<script setup>`), TypeScript, Pinia (stores), Vue Router (file-based routing), Vite |
+| **Frontend** | Vue 3, TypeScript, Pinia, Vue Router, Vite |
 | **Auth + Profiles services** | Django 5.2, Django REST Framework, `djangorestframework-simplejwt` (JWT auth) |
 | **Task service** | NestJS 11 (TypeScript), TypeORM, `class-validator`, `@nestjs/jwt` (stateless HS256 verification) |
 | **Workspace service** | Spring Boot 3, Maven, Java 21, Spring Security resource server, Spring Data JPA, Flyway |
@@ -126,10 +126,11 @@ attachment metadata but retain Azure blobs for audit.
 The original Django implementation, kept for reference. It is **commented out** in
 `docker-compose.yml`; `task-service` now occupies port 8003 in its place.
 
-### `frontend/` — Quasar SPA
-Login, register, task CRUD and profile pages. All API calls go through the
-single gateway origin (`http://localhost:8080`). State lives in Pinia stores
-(`auth`, `tasks`); a route guard protects authenticated pages.
+### `ui/` — Vue SPA
+Login, register, workspace/project/task pages, search, profile, and realtime
+in-app notifications. All API calls go through the single gateway origin
+(`http://localhost:8080`). State lives in Pinia stores; a route guard protects
+authenticated pages.
 
 ### `integration-tests/test_services.py` — End-to-end test
 Walks the real cross-service flow (register → login → tasks CRUD → profile
@@ -146,7 +147,7 @@ From the repo root:
 docker compose up -d --build
 ```
 
-This starts all containers on the `todonet` network, including the Quasar
+This starts all containers on the `todonet` network, including the Vue
 frontend built as static files and served by nginx. Each service's Postgres
 comes up first (with a healthcheck); the service waits for its own DB before
 migrating/starting:
@@ -176,9 +177,9 @@ migrating/starting:
 ### 2. Run the frontend outside Docker, if needed
 
 ```bash
-cd frontend
+cd ui
 npm install
-npx quasar dev      # opens http://localhost:9000
+npm run dev         # opens http://localhost:5173
 ```
 
 Register a new account in the UI, or log in with one you created.
