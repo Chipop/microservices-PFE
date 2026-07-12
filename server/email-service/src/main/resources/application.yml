@@ -1,0 +1,56 @@
+server:
+  port: ${PORT:8000}
+
+spring:
+  application:
+    name: email-service
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:emails}
+    username: ${POSTGRES_USER:todo}
+    password: ${POSTGRES_PASSWORD:todo}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${SMTP_AUTH_ENABLED:false}
+          starttls:
+            enable: ${SMTP_STARTTLS_ENABLED:true}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+events:
+  exchange: ${RABBITMQ_EXCHANGE:flowforge.events}
+  queue: ${EMAIL_QUEUE:email-service.events}
+  routing-keys:
+    - user.registered
+    - password_reset.requested
+    - workspace.invitation
+    - task.assigned
+    - task.deadline_approaching
+    - task.weekly_summary
+
+rabbitmq:
+  url: ${RABBITMQ_URL:amqp://guest:guest@localhost:5672/}
+
+email:
+  from: ${SMTP_FROM:noreply@flowforge.local}
+  max-attempts: ${EMAIL_MAX_ATTEMPTS:3}
+  retry-backoff-ms: ${EMAIL_RETRY_BACKOFF_MS:1000}

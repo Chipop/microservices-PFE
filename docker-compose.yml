@@ -107,6 +107,24 @@ services:
       retries: 10
     networks: [flowforge-platform-network]
 
+  emails-db:
+    image: postgres:16-alpine
+    container_name: emails-db
+    environment:
+      - POSTGRES_USER=todo
+      - POSTGRES_PASSWORD=todo
+      - POSTGRES_DB=emails
+    volumes:
+      - emails_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5439:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U todo -d emails"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [flowforge-platform-network]
+
   user-service:
     build: ./server/user-service
     container_name: user-service
@@ -269,6 +287,37 @@ services:
         condition: service_healthy
     networks: [flowforge-platform-network]
 
+  email-service:
+    build: ./server/email-service
+    container_name: email-service
+    environment:
+      - PORT=8000
+      - POSTGRES_HOST=emails-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=emails
+      - POSTGRES_USER=todo
+      - POSTGRES_PASSWORD=todo
+      - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
+      - RABBITMQ_EXCHANGE=flowforge.events
+      - EMAIL_QUEUE=email-service.events
+      - SMTP_HOST=${SMTP_HOST:-smtp.example.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-noreply@flowforge.local}
+      - SMTP_AUTH_ENABLED=${SMTP_AUTH_ENABLED:-true}
+      - SMTP_STARTTLS_ENABLED=${SMTP_STARTTLS_ENABLED:-true}
+      - EMAIL_MAX_ATTEMPTS=${EMAIL_MAX_ATTEMPTS:-3}
+      - EMAIL_RETRY_BACKOFF_MS=${EMAIL_RETRY_BACKOFF_MS:-1000}
+    ports:
+      - "8007:8000"
+    depends_on:
+      emails-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks: [flowforge-platform-network]
+
   api-gateway:
     image: nginx:alpine
     container_name: api-gateway
@@ -283,6 +332,7 @@ services:
       - workspace-service
       - attachment-service
       - notification-service
+      - email-service
     networks: [flowforge-platform-network]
 
   frontend:
@@ -333,6 +383,7 @@ volumes:
   workspaces_pgdata:
   attachments_pgdata:
   notifications_pgdata:
+  emails_pgdata:
   rabbitmq_data:
 
 networks:
