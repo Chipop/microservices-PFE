@@ -2,6 +2,8 @@ from django.conf import settings
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
 
+from .events import publish_domain_event
+from .models import Profile
 from .storage import ProfileStorageError, get_profile_storage
 
 
@@ -70,3 +72,62 @@ def delete_profile_picture(profile):
     if old_key:
         storage.delete(old_key)
     return profile
+
+
+@transaction.atomic
+def provision_profile_from_user_registered(event):
+    data = event.get("data") or {}
+    resource = event.get("resource") or {}
+    raw_user_id = data.get("userId") or data.get("authUserId") or resource.get("id")
+    username = data.get("username")
+    email = data.get("email", "")
+
+    if raw_user_id is None:
+        raise ValueError("user.registered event is missing resource.id")
+    if not username:
+        raise ValueError("user.registered event is missing data.username")
+
+    profile, created = Profile.objects.get_or_create(
+        auth_user_id=int(raw_user_id),
+        defaults={
+            "username": str(username),
+            "email": str(email or ""),
+        },
+    )
+    if created:
+        publish_domain_event(
+            "user.profile.created",
+            "user",
+            profile.auth_user_id,
+            actor_user_id=profile.auth_user_id,
+            data=_profile_search_document(profile),
+        )
+        return profile
+
+    changed_fields = []
+    if profile.username != str(username):
+        profile.username = str(username)
+        changed_fields.append("username")
+    if email is not None and profile.email != str(email):
+        profile.email = str(email)
+        changed_fields.append("email")
+    if changed_fields:
+        changed_fields.append("updated_at")
+        profile.save(update_fields=changed_fields)
+    return profile
+
+
+def _profile_search_document(profile):
+    return {
+        "type": "user",
+        "resourceId": profile.auth_user_id,
+        "authUserId": profile.auth_user_id,
+        "username": profile.username,
+        "title": profile.username,
+        "biography": profile.biography,
+        "description": profile.biography,
+        "timezone": profile.timezone,
+        "language": profile.language,
+        "profilePictureUrl": profile_picture_url(profile),
+        "updatedAt": profile.updated_at,
+    }
