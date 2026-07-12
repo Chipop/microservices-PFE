@@ -147,12 +147,15 @@ services:
       - POSTGRES_DB=auth
       - POSTGRES_USER=todo
       - POSTGRES_PASSWORD=todo
+      - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
     volumes:
       - ./server/auth-service:/app
     ports:
       - "8002:8000"
     depends_on:
       auth-db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     networks: [flowforge-platform-network]
 
@@ -182,10 +185,13 @@ services:
       - POSTGRES_PASSWORD=todo
       - TASK_SCHEMA_SYNC=true
       - WORKSPACE_SERVICE_BASE_URL=http://workspace-service:8000
+      - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
     ports:
       - "8003:8000"
     depends_on:
       tasks-db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     networks: [flowforge-platform-network]
 
@@ -203,10 +209,13 @@ services:
       - POSTGRES_PASSWORD=todo
       - WORKSPACE_INVITATION_TTL_HOURS=168
       - CORS_ALLOWED_ORIGINS=*
+      - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
     ports:
       - "8004:8000"
     depends_on:
       workspaces-db:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     networks: [flowforge-platform-network]
 
@@ -229,6 +238,7 @@ services:
       - ATTACHMENT_ALLOWED_CONTENT_TYPES=image/jpeg,image/png,image/webp,application/pdf,text/plain
       - ATTACHMENT_SIGNED_URL_TTL_SECONDS=900
       - ATTACHMENT_KEY_PREFIX=attachments
+      - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
     ports:
       - "8005:8000"
     depends_on:
@@ -236,6 +246,8 @@ services:
         condition: service_healthy
       task-service:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
     networks: [flowforge-platform-network]
 
   notification-service:

@@ -43,6 +43,7 @@ import {
   TaskStatus,
   TaskTag,
 } from './entities/task.entity';
+import { DomainEventPublisher } from '../events/domain-event.publisher';
 
 const DEFAULT_STATUSES = [
   { name: 'Todo', slug: 'todo', position: 0, is_terminal: false },
@@ -132,6 +133,7 @@ export class TasksService {
     @InjectRepository(SavedFilter)
     private readonly savedFilters: Repository<SavedFilter>,
     private readonly config: ConfigService,
+    private readonly events: DomainEventPublisher,
   ) {}
 
   async findAll(user: { userId: number; token: string }, query: ListTasksQueryDto): Promise<TaskResponse[]> {
@@ -189,7 +191,19 @@ export class TasksService {
       archived_at: status.slug === 'archived' ? new Date() : null,
       kanban_column_id: column?.id ?? null,
     });
-    return this.findOne(user, (await this.tasks.save(task)).id);
+    const saved = await this.tasks.save(task);
+    const response = await this.findOne(user, saved.id);
+    await this.events.publish({
+      eventType: 'task.created',
+      actorUserId: userId,
+      resource: { type: 'task', id: response.id },
+      data: {
+        taskId: response.id,
+        workspaceId: response.workspace_id,
+        title: response.title,
+      },
+    });
+    return response;
   }
 
   async findOne(user: { userId: number; token: string }, id: number): Promise<TaskResponse> {
@@ -199,6 +213,7 @@ export class TasksService {
   async update(user: { userId: number; token: string }, id: number, dto: UpdateTaskDto): Promise<TaskResponse> {
     const userId = user.userId;
     const task = await this.getContributableTask(user, id);
+    const wasCompleted = Boolean(task.completed_at || task.status?.slug === 'done');
 
     if (dto.title !== undefined) task.title = dto.title;
     if (dto.description !== undefined) task.description = dto.description;
@@ -222,7 +237,31 @@ export class TasksService {
     }
 
     await this.tasks.save(task);
-    return this.findOne(user, id);
+    const response = await this.findOne(user, id);
+    await this.events.publish({
+      eventType: 'task.updated',
+      actorUserId: userId,
+      resource: { type: 'task', id: response.id },
+      data: {
+        taskId: response.id,
+        workspaceId: response.workspace_id,
+        title: response.title,
+      },
+    });
+    if (!wasCompleted && response.done) {
+      await this.events.publish({
+        eventType: 'task.completed',
+        actorUserId: userId,
+        resource: { type: 'task', id: response.id },
+        data: {
+          taskId: response.id,
+          workspaceId: response.workspace_id,
+          title: response.title,
+          completedAt: response.completed_at,
+        },
+      });
+    }
+    return response;
   }
 
   async remove(user: { userId: number; token: string }, id: number): Promise<void> {
@@ -247,7 +286,7 @@ export class TasksService {
   }
 
   async addAssignment(user: { userId: number; token: string }, taskId: number, dto: AssignTaskDto) {
-    await this.getContributableTask(user, taskId);
+    const task = await this.getContributableTask(user, taskId);
     if (dto.assignee_user_id <= 0) throw new BadRequestException('Assignee must be a positive user id.');
     const row = this.assignments.create({
       task_id: taskId,
@@ -255,7 +294,19 @@ export class TasksService {
       assigned_by_user_id: user.userId,
     });
     try {
-      return await this.assignments.save(row);
+      const assignment = await this.assignments.save(row);
+      await this.events.publish({
+        eventType: 'task.assigned',
+        actorUserId: user.userId,
+        resource: { type: 'task', id: taskId },
+        data: {
+          taskId,
+          workspaceId: task.workspace_id,
+          assigneeUserId: dto.assignee_user_id,
+          assignedByUserId: user.userId,
+        },
+      });
+      return assignment;
     } catch {
       throw new ConflictException('Task is already assigned to this user.');
     }

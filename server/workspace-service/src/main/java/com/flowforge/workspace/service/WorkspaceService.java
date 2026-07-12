@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -68,7 +69,11 @@ public class WorkspaceService {
         owner.setRole(WorkspaceRole.OWNER);
         members.save(owner);
 
-        events.publish("WorkspaceCreated", workspace.getId(), userId);
+        events.publish("workspace.created", "workspace", workspace.getId(), userId, Map.of(
+                "workspaceId", workspace.getId(),
+                "workspaceType", workspace.getWorkspaceType().name(),
+                "name", workspace.getName()
+        ));
         return toResponse(workspace, owner);
     }
 
@@ -89,7 +94,6 @@ public class WorkspaceService {
         if (request.publicContributionsEnabled() != null) {
             workspace.setPublicContributionsEnabled(request.publicContributionsEnabled());
         }
-        events.publish("WorkspaceUpdated", workspaceId, userId);
         return toResponse(workspace, requireMember(workspaceId, userId));
     }
 
@@ -99,7 +103,6 @@ public class WorkspaceService {
         requireOwner(workspaceId, userId);
         if (workspace.getArchivedAt() == null) {
             workspace.setArchivedAt(Instant.now());
-            events.publish("WorkspaceUpdated", workspaceId, userId);
         }
         return toResponse(workspace, requireMember(workspaceId, userId));
     }
@@ -110,7 +113,6 @@ public class WorkspaceService {
         requireOwner(workspaceId, userId);
         workspace.setDeletedAt(Instant.now());
         workspace.setDeletedByUserId(userId);
-        events.publish("WorkspaceDeleted", workspaceId, userId);
     }
 
     @Transactional(readOnly = true)
@@ -135,7 +137,11 @@ public class WorkspaceService {
             throw badRequest("Owner role cannot be changed here.");
         }
         target.setRole(request.role());
-        events.publish("MemberRoleChanged", workspaceId, userId);
+        events.publish("workspace.role_changed", "workspace", workspaceId, userId, Map.of(
+                "workspaceId", workspaceId,
+                "targetUserId", targetUserId,
+                "role", request.role().name()
+        ));
         return toMemberResponse(target);
     }
 
@@ -150,7 +156,6 @@ public class WorkspaceService {
         }
         target.setRemovedAt(Instant.now());
         target.setRemovedByUserId(userId);
-        events.publish("MemberRemoved", workspaceId, userId);
     }
 
     @Transactional
@@ -163,8 +168,16 @@ public class WorkspaceService {
         currentOwner.setRole(WorkspaceRole.ADMIN);
         newOwner.setRole(WorkspaceRole.OWNER);
         workspace.setOwnerUserId(newOwner.getUserId());
-        events.publish("MemberRoleChanged", workspaceId, userId);
-        events.publish("WorkspaceUpdated", workspaceId, userId);
+        events.publish("workspace.role_changed", "workspace", workspaceId, userId, Map.of(
+                "workspaceId", workspaceId,
+                "targetUserId", currentOwner.getUserId(),
+                "role", WorkspaceRole.ADMIN.name()
+        ));
+        events.publish("workspace.role_changed", "workspace", workspaceId, userId, Map.of(
+                "workspaceId", workspaceId,
+                "targetUserId", newOwner.getUserId(),
+                "role", WorkspaceRole.OWNER.name()
+        ));
         return toResponse(workspace, currentOwner);
     }
 
@@ -196,7 +209,12 @@ public class WorkspaceService {
         invitation.setExpiresAt(Instant.now().plus(properties.invitationTtlHours(), ChronoUnit.HOURS));
         invitation = invitations.save(invitation);
 
-        events.publish("MemberInvited", workspaceId, userId);
+        events.publish("workspace.invitation", "invitation", invitation.getId(), userId, Map.of(
+                "workspaceId", workspaceId,
+                "invitationId", invitation.getId(),
+                "invitedEmail", invitation.getInvitedEmail(),
+                "role", invitation.getRole().name()
+        ));
         return toInvitationResponse(invitation, token);
     }
 
@@ -221,7 +239,6 @@ public class WorkspaceService {
         invitation.setInvitedUserId(userId);
         invitation.setStatus(InvitationStatus.ACCEPTED);
         invitation.setRespondedAt(Instant.now());
-        events.publish("InvitationAccepted", workspace.getId(), userId);
         return toInvitationResponse(invitation, null);
     }
 
@@ -335,7 +352,11 @@ public class WorkspaceService {
         owner.setUserId(userId);
         owner.setRole(WorkspaceRole.OWNER);
         members.save(owner);
-        events.publish("WorkspaceCreated", workspace.getId(), userId);
+        events.publish("workspace.created", "workspace", workspace.getId(), userId, Map.of(
+                "workspaceId", workspace.getId(),
+                "workspaceType", workspace.getWorkspaceType().name(),
+                "name", workspace.getName()
+        ));
         return workspace;
     }
 

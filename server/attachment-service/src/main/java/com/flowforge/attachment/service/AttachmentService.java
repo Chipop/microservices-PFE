@@ -3,6 +3,7 @@ package com.flowforge.attachment.service;
 import com.flowforge.attachment.config.AttachmentProperties;
 import com.flowforge.attachment.dto.AttachmentResponse;
 import com.flowforge.attachment.dto.DownloadLinkResponse;
+import com.flowforge.attachment.event.DomainEventPublisher;
 import com.flowforge.attachment.model.Attachment;
 import com.flowforge.attachment.model.AttachmentTargetType;
 import com.flowforge.attachment.repository.AttachmentRepository;
@@ -18,6 +19,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -27,18 +29,21 @@ public class AttachmentService {
     private final AttachmentStorage storage;
     private final TargetAccessService targetAccess;
     private final AttachmentProperties properties;
+    private final DomainEventPublisher events;
     private final Set<String> allowedContentTypes;
 
     public AttachmentService(
             AttachmentRepository attachments,
             AttachmentStorage storage,
             TargetAccessService targetAccess,
-            AttachmentProperties properties
+            AttachmentProperties properties,
+            DomainEventPublisher events
     ) {
         this.attachments = attachments;
         this.storage = storage;
         this.targetAccess = targetAccess;
         this.properties = properties;
+        this.events = events;
         this.allowedContentTypes = Arrays.stream(properties.allowedContentTypes().split(","))
                 .map(String::trim)
                 .map(value -> value.toLowerCase(Locale.ROOT))
@@ -92,7 +97,17 @@ public class AttachmentService {
             attachment.setStoredBlobKey(key);
             attachment.setContentType(contentType);
             attachment.setSizeBytes(file.getSize());
-            return toResponse(attachments.save(attachment));
+            var saved = attachments.save(attachment);
+            events.publish("attachment.added", "attachment", saved.getId(), userId, Map.of(
+                    "attachmentId", saved.getId(),
+                    "targetType", saved.getTargetType().name(),
+                    "targetId", saved.getTargetId(),
+                    "parentTaskId", saved.getParentTaskId(),
+                    "filename", saved.getOriginalFilename(),
+                    "contentType", saved.getContentType(),
+                    "sizeBytes", saved.getSizeBytes()
+            ));
+            return toResponse(saved);
         } catch (IOException exc) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Attachment upload failed");
         } catch (RuntimeException exc) {

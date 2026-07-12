@@ -30,10 +30,11 @@ visibility/contribution permissions through `workspace-service`.
 - Assign tasks by auth user id.
 - Validate task permissions through workspace visibility and contribution rules.
 - Hide cross-user tasks by returning `404`.
+- Publish RabbitMQ domain events for task create, update, assignment, and
+  completion.
 
-Events are intentionally not published yet. Task mutations are centralized in
-`TasksService`, so a future Kafka/RabbitMQ publisher can be added there without
-rewriting controller logic.
+Events are published from `TasksService` after successful database writes. A
+broker failure is logged and does not fail the API request.
 
 ## Owned Data
 
@@ -145,6 +146,20 @@ Supporting routes:
 | `POSTGRES_PASSWORD` | In Compose | DB password, defaults to `todo`. |
 | `TASK_SCHEMA_SYNC` | No | Local schema sync toggle. Use `false` in production. |
 | `WORKSPACE_SERVICE_BASE_URL` | In Compose | Internal workspace-service URL. |
+| `RABBITMQ_URL` | No | AMQP URL for domain event publishing. |
+| `RABBITMQ_EXCHANGE` | No | Topic exchange for domain events, defaults to `flowforge.events`. |
+
+## Events
+
+The service publishes:
+
+- `task.created`
+- `task.updated`
+- `task.assigned`
+- `task.completed`
+
+See [`../EVENTS.md`](../EVENTS.md) for the shared event envelope, routing keys,
+payload fields, and sensitive-data rules.
 
 ## Persistence
 

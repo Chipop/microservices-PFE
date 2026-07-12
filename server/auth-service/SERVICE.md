@@ -42,6 +42,7 @@ python manage.py runserver 0.0.0.0:8000
 - Account locking after repeated failed login attempts
 - Profile creation handoff to `user-service` through `api-gateway`
 - Personal workspace creation handoff to `workspace-service` through `api-gateway`
+- RabbitMQ domain events for registration and password-reset requests
 
 ## Owned Data
 
@@ -212,6 +213,18 @@ personal workspace.
 | `AUTH_LOCK_MINUTES` | No | Lock duration, defaults to `15`. |
 | `AUTH_RESET_TOKEN_MINUTES` | No | Password reset token lifetime, defaults to `30`. |
 | `AUTH_VERIFY_TOKEN_HOURS` | No | Verification token lifetime, defaults to `24`. |
+| `RABBITMQ_URL` | No | AMQP URL for domain event publishing. |
+| `RABBITMQ_EXCHANGE` | No | Topic exchange for domain events, defaults to `flowforge.events`. |
+
+## Events
+
+The service publishes best-effort RabbitMQ domain events after database commit:
+
+- `user.registered`
+- `password_reset.requested`
+
+See [`../EVENTS.md`](../EVENTS.md) for the shared event envelope, routing keys,
+payload fields, and sensitive-data rules.
 
 ## Security Notes
 

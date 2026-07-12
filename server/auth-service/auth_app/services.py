@@ -18,6 +18,7 @@ from rest_framework.exceptions import AuthenticationFailed, PermissionDenied, Va
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import AuthSession, AuthToken, LoginAttempt, User
+from .events import publish_domain_event
 
 
 LOCK_THRESHOLD = int(os.environ.get("AUTH_LOCK_THRESHOLD", "5"))
@@ -182,6 +183,16 @@ def request_password_reset(email):
         "Password reset",
         f"Use this token to reset your password: {raw_token}",
         user.email,
+    )
+    publish_domain_event(
+        "password_reset.requested",
+        "user",
+        user.id,
+        actor_user_id=user.id,
+        data={
+            "userId": user.id,
+            "email": user.email,
+        },
     )
     return raw_token if settings.DEBUG else None
 

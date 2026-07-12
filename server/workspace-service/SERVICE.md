@@ -143,18 +143,16 @@ workspace.
 
 ## Events
 
-The service calls a `WorkspaceEventPublisher` interface for:
+The service publishes domain events to the `flowforge.events` RabbitMQ topic
+exchange through `WorkspaceEventPublisher`. Publishing is best-effort and runs
+after transaction commit. Routing keys use `resource.event` format:
 
-- `WorkspaceCreated`
-- `WorkspaceUpdated`
-- `WorkspaceDeleted`
-- `MemberInvited`
-- `InvitationAccepted`
-- `MemberRemoved`
-- `MemberRoleChanged`
+- `workspace.created`
+- `workspace.invitation`
+- `workspace.role_changed`
 
-The current implementation is a no-op publisher. Kafka or RabbitMQ can replace
-it later without changing controller code.
+See [`../EVENTS.md`](../EVENTS.md) for the shared event envelope, payload
+fields, and sensitive-data rules.
 
 ## Environment Variables
 
@@ -170,6 +168,8 @@ it later without changing controller code.
 | `POSTGRES_PASSWORD` | In Compose | DB password, defaults to `todo`. |
 | `WORKSPACE_INVITATION_TTL_HOURS` | No | Invitation lifetime, defaults to 168 hours. |
 | `CORS_ALLOWED_ORIGINS` | No | Comma-separated origins or `*` for local dev. |
+| `RABBITMQ_URL` | No | AMQP URL for domain event publishing. |
+| `RABBITMQ_EXCHANGE` | No | Topic exchange for domain events, defaults to `flowforge.events`. |
 
 ## Persistence
 

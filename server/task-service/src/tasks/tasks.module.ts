@@ -16,6 +16,7 @@ import {
 } from './entities/task.entity';
 import { TasksController } from './tasks.controller';
 import { TasksService } from './tasks.service';
+import { DomainEventPublisher } from '../events/domain-event.publisher';
 
 @Module({
   imports: [
@@ -35,6 +36,6 @@ import { TasksService } from './tasks.service';
     ]),
   ],
   controllers: [TasksController],
-  providers: [TasksService],
+  providers: [TasksService, DomainEventPublisher],
 })
 export class TasksModule {}

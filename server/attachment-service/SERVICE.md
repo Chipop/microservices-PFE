@@ -32,6 +32,7 @@ databases directly.
 - Check task access permissions through `task-service`.
 - Generate short-lived secure download links.
 - Soft-delete attachment metadata while retaining Azure blobs for audit.
+- Publish RabbitMQ domain events after attachment metadata is saved.
 
 ## Owned Data
 
@@ -147,6 +148,17 @@ keep their Azure blobs for audit and traceability.
 | `AZURE_STORAGE_ACCOUNT_URL` | One auth option | Account URL for workload identity. |
 | `AZURE_STORAGE_ACCOUNT_NAME` | Optional | Account name for SAS generation if needed. |
 | `AZURE_STORAGE_ACCOUNT_KEY` | Optional | Enables account-key SAS signed URLs. |
+| `RABBITMQ_URL` | No | AMQP URL for domain event publishing. |
+| `RABBITMQ_EXCHANGE` | No | Topic exchange for domain events, defaults to `flowforge.events`. |
+
+## Events
+
+The service publishes `attachment.added` after attachment metadata is saved and
+the surrounding transaction commits. A broker failure is logged and does not
+fail the upload response.
+
+See [`../EVENTS.md`](../EVENTS.md) for the shared event envelope, routing key,
+payload fields, and sensitive-data rules.
 
 ## Persistence
 

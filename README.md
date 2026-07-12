@@ -46,6 +46,7 @@ single-page frontend.
 | **API Gateway** | nginx (alpine) — reverse proxy / single entry point |
 | **Auth** | JWT (HS256), one shared `JWT_SIGNING_KEY` across all services; identity in the `user_id` claim |
 | **Database** | PostgreSQL 16 — **one container per service** (`auth-db`, `users-db`, `tasks-db`, `workspaces-db`), each with its own volume; services share nothing |
+| **Events** | RabbitMQ topic exchange `flowforge.events`; producer services publish `resource.event` routing keys |
 | **Runtime** | Docker + Docker Compose (one network, `todonet`) |
 | **Test** | `integration-tests/test_services.py` — cross-service end-to-end check (Python `requests`) |
 
@@ -159,6 +160,7 @@ migrating/starting:
 | `task-service` | http://localhost:8003 |
 | `workspace-service` | http://localhost:8004 |
 | `attachment-service` | http://localhost:8005 |
+| `flowforge-rabbitmq` | AMQP `localhost:5672`, management UI http://localhost:15672 |
 | `auth-db` (PostgreSQL) | localhost:5433 (`todo` / `todo`) |
 | `users-db` (PostgreSQL) | localhost:5434 (`todo` / `todo`) |
 | `tasks-db` (PostgreSQL) | localhost:5435 (`todo` / `todo`) |
@@ -204,6 +206,10 @@ python integration-tests/test_services.py
   (`auth_pgdata`, `users_pgdata`, `tasks_pgdata`, `workspaces_pgdata`, `attachments_pgdata`). Services share nothing at the
   data layer — they communicate only over HTTP. Each DB is created by its
   container's `POSTGRES_DB`.
+- Domain events are published to RabbitMQ by `auth-service`, `task-service`,
+  `workspace-service`, and `attachment-service`. The event envelope, routing
+  keys, payload fields, and added dependencies are documented in
+  [`server/EVENTS.md`](server/EVENTS.md).
 - `task-service` runs TypeORM with `TASK_SCHEMA_SYNC=true` in local Compose so
   task tables are created automatically on first boot. Set it to `false` and run
   explicit migrations before production.

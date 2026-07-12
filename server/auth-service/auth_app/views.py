@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from .models import AuthSession, AuthToken, User
+from .events import publish_domain_event
 from .serializers import (
     ForgotPasswordSerializer,
     LoginSerializer,
@@ -44,6 +45,16 @@ class RegisterView(generics.CreateAPIView):
     def perform_create(self, serializer):
         user = serializer.save()
         request_verification(user, AuthToken.Purpose.EMAIL_VERIFICATION)
+        publish_domain_event(
+            "user.registered",
+            "user",
+            user.id,
+            actor_user_id=user.id,
+            data={
+                "username": user.username,
+                "email": user.email,
+            },
+        )
         gateway = os.environ.get("GATEWAY_URL", "http://api-gateway")
         try:
             requests.post(

@@ -37,3 +37,9 @@ attachment:
     account-name: ${AZURE_STORAGE_ACCOUNT_NAME:}
     account-key: ${AZURE_STORAGE_ACCOUNT_KEY:}
     key-prefix: ${ATTACHMENT_KEY_PREFIX:attachments}
+
+events:
+  exchange: ${RABBITMQ_EXCHANGE:flowforge.events}
+
+rabbitmq:
+  url: ${RABBITMQ_URL:amqp://guest:guest@localhost:5672/}
