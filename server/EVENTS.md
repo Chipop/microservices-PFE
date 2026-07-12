@@ -113,7 +113,16 @@ Published after a task is created.
   "data": {
     "taskId": 42,
     "workspaceId": 7,
-    "title": "Prepare release"
+    "ownerUserId": 1,
+    "authorUserId": 1,
+    "title": "Prepare release",
+    "description": "Cut the backend release",
+    "status": "todo",
+    "statusName": "Todo",
+    "priority": "normal",
+    "tags": ["backend"],
+    "viewerUserIds": [1, 9],
+    "updatedAt": "2026-07-12T12:00:00.000Z"
   }
 }
 ```
@@ -131,7 +140,33 @@ Published after a task update is saved.
   "data": {
     "taskId": 42,
     "workspaceId": 7,
-    "title": "Prepare release"
+    "ownerUserId": 1,
+    "authorUserId": 1,
+    "title": "Prepare release",
+    "description": "Cut the backend release",
+    "status": "in_progress",
+    "statusName": "In Progress",
+    "priority": "high",
+    "tags": ["backend"],
+    "viewerUserIds": [1, 9],
+    "updatedAt": "2026-07-12T12:00:00.000Z"
+  }
+}
+```
+
+#### `task.deleted`
+
+Published after a task is soft-deleted.
+
+```json
+{
+  "eventType": "task.deleted",
+  "producer": "task-service",
+  "actorUserId": 1,
+  "resource": { "type": "task", "id": 42 },
+  "data": {
+    "taskId": 42,
+    "workspaceId": 7
   }
 }
 ```
@@ -174,6 +209,51 @@ Published when a task transitions from incomplete to complete.
 }
 ```
 
+#### `task.comment.created`
+
+Published after a task comment is created.
+
+```json
+{
+  "eventType": "task.comment.created",
+  "producer": "task-service",
+  "actorUserId": 1,
+  "resource": { "type": "comment", "id": 101 },
+  "data": {
+    "commentId": 101,
+    "taskId": 42,
+    "workspaceId": 7,
+    "authorUserId": 1,
+    "body": "Backend implementation is ready for review.",
+    "viewerUserIds": [1, 9],
+    "updatedAt": "2026-07-12T12:00:00.000Z"
+  }
+}
+```
+
+#### `task.comment.updated`
+
+Published after a task comment body is updated. The payload matches
+`task.comment.created`.
+
+#### `task.comment.deleted`
+
+Published after a task comment is soft-deleted.
+
+```json
+{
+  "eventType": "task.comment.deleted",
+  "producer": "task-service",
+  "actorUserId": 1,
+  "resource": { "type": "comment", "id": 101 },
+  "data": {
+    "commentId": 101,
+    "taskId": 42,
+    "workspaceId": 7
+  }
+}
+```
+
 ### `workspace-service`
 
 #### `workspace.created`
@@ -189,7 +269,69 @@ Published after a team or personal workspace is created.
   "data": {
     "workspaceId": 7,
     "workspaceType": "TEAM",
-    "name": "Engineering"
+    "name": "Engineering",
+    "description": "Product engineering workspace",
+    "ownerUserId": 1,
+    "visibility": "PRIVATE",
+    "memberUserIds": [1, 9],
+    "updatedAt": "2026-07-12T12:00:00Z"
+  }
+}
+```
+
+#### `workspace.updated`
+
+Published after workspace searchable fields change.
+
+```json
+{
+  "eventType": "workspace.updated",
+  "producer": "workspace-service",
+  "actorUserId": 1,
+  "resource": { "type": "workspace", "id": 7 },
+  "data": {
+    "workspaceId": 7,
+    "workspaceType": "TEAM",
+    "name": "Engineering",
+    "description": "Product engineering workspace",
+    "ownerUserId": 1,
+    "visibility": "PRIVATE",
+    "memberUserIds": [1, 9],
+    "updatedAt": "2026-07-12T12:00:00Z"
+  }
+}
+```
+
+#### `workspace.deleted`
+
+Published after a workspace is soft-deleted.
+
+```json
+{
+  "eventType": "workspace.deleted",
+  "producer": "workspace-service",
+  "actorUserId": 1,
+  "resource": { "type": "workspace", "id": 7 },
+  "data": {
+    "workspaceId": 7
+  }
+}
+```
+
+#### `workspace.access_updated`
+
+Published after workspace membership or ownership changes so consumers can
+refresh searchable ACLs.
+
+```json
+{
+  "eventType": "workspace.access_updated",
+  "producer": "workspace-service",
+  "actorUserId": 1,
+  "resource": { "type": "workspace", "id": 7 },
+  "data": {
+    "workspaceId": 7,
+    "memberUserIds": [1, 9]
   }
 }
 ```
@@ -256,6 +398,34 @@ Published after attachment metadata is saved.
 }
 ```
 
+### `user-service`
+
+#### `user.profile.created`
+
+Published after a profile is created by the internal registration handoff.
+
+```json
+{
+  "eventType": "user.profile.created",
+  "producer": "user-service",
+  "actorUserId": 1,
+  "resource": { "type": "user", "id": 1 },
+  "data": {
+    "authUserId": 1,
+    "username": "alice",
+    "biography": "Product builder",
+    "timezone": "UTC",
+    "language": "en",
+    "profilePictureUrl": "https://..."
+  }
+}
+```
+
+#### `user.profile.updated`
+
+Published after public searchable profile fields or profile-picture metadata
+change. The payload matches `user.profile.created`.
+
 ## Configuration Added
 
 Each producer service reads:
@@ -270,6 +440,30 @@ Dependencies added:
 | Service | Dependency |
 |---|---|
 | `auth-service` | `pika` |
+| `user-service` | `pika` |
 | `task-service` | `amqplib`, `@types/amqplib` |
 | `workspace-service` | `spring-boot-starter-amqp` |
 | `attachment-service` | `spring-boot-starter-amqp` |
+| `search-service` | `spring-boot-starter-amqp` |
+| `notification-service` | `spring-boot-starter-amqp`, `spring-boot-starter-websocket` |
+
+## Consumer Contracts
+
+`notification-service` only binds to events that carry explicit recipient user
+ids:
+
+- `task.assigned`
+- `task.completed`
+- `task.deadline_approaching`
+- `user.mentioned`
+- `workspace.role_changed`
+
+`workspace.invitation` and `attachment.added` are not notification-bound today
+because they do not include recipient user ids. `task.comment.created` is indexed
+for search, but mentions require a future `user.mentioned` event with
+`mentionedUserId`, `mentionedUserIds`, or `recipientUserId`.
+
+`email-service` only binds to events that contain a usable recipient email and
+required action data. It currently consumes `user.registered` and the future
+`task.weekly_summary` contract. Password-reset and workspace-invitation tokens
+are intentionally not published to the shared domain event exchange.
