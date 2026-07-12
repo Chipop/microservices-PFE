@@ -18,6 +18,7 @@ const GATEWAY = (ENV.VITE_GATEWAY_URL as string) ?? 'http://localhost:8080';
 export const AUTH_BASE = `${GATEWAY}/api/auth`;
 export const TASKS_BASE = `${GATEWAY}/api/tasks`;
 export const PROFILES_BASE = `${GATEWAY}/api/profiles`;
+export const NOTIFICATIONS_BASE = `${GATEWAY}/api/notifications`;
 
 const ACCESS_KEY = 'todo_access';
 const REFRESH_KEY = 'todo_refresh';
@@ -133,6 +134,38 @@ export interface PublicProfile {
   joined_date: string;
 }
 
+export type NotificationType =
+  | 'TASK_ASSIGNED'
+  | 'TASK_COMPLETED'
+  | 'TASK_DEADLINE_APPROACHING'
+  | 'WORKSPACE_INVITATION_CREATED'
+  | 'WORKSPACE_ROLE_CHANGED'
+  | 'ATTACHMENT_ADDED'
+  | 'USER_MENTIONED';
+
+export type RelatedResourceType = 'TASK' | 'WORKSPACE' | 'INVITATION' | 'ATTACHMENT' | 'COMMENT';
+
+export interface NotificationItem {
+  id: number;
+  recipientUserId: number;
+  type: NotificationType;
+  title: string;
+  message: string;
+  relatedResourceId: number | null;
+  relatedResourceType: RelatedResourceType | null;
+  isRead: boolean;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface Page<T> {
+  content: T[];
+  number: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -155,6 +188,14 @@ export function decodeUserId(access: string | null): number | null {
   } catch {
     return null;
   }
+}
+
+export function notificationWebSocketUrl(): string | null {
+  if (!tokens.access) return null;
+  const url = new URL('/ws/notifications', GATEWAY);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  url.searchParams.set('access_token', tokens.access);
+  return url.toString();
 }
 
 // ---------------------------------------------------------------------------
@@ -380,5 +421,26 @@ export const profilesApi = {
   },
   deletePicture() {
     return request<void>(`${PROFILES_BASE}/picture/`, { method: 'DELETE' });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Notifications service (8006)
+// ---------------------------------------------------------------------------
+export const notificationsApi = {
+  list(page = 0, size = 20) {
+    return request<Page<NotificationItem>>(`${NOTIFICATIONS_BASE}?page=${page}&size=${size}`);
+  },
+  unreadCount() {
+    return request<{ count: number }>(`${NOTIFICATIONS_BASE}/unread-count`);
+  },
+  markRead(id: number) {
+    return request<NotificationItem>(`${NOTIFICATIONS_BASE}/${id}/read`, { method: 'PATCH' });
+  },
+  markAllRead() {
+    return request<{ updated: number }>(`${NOTIFICATIONS_BASE}/read-all`, { method: 'PATCH' });
+  },
+  remove(id: number) {
+    return request<void>(`${NOTIFICATIONS_BASE}/${id}`, { method: 'DELETE' });
   },
 };
