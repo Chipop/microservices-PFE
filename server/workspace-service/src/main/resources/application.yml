@@ -27,6 +27,14 @@ workspace:
 
 events:
   exchange: ${RABBITMQ_EXCHANGE:flowforge.events}
+  queue: ${WORKSPACE_QUEUE:workspace-service.events}
+  dead-letter-exchange: ${WORKSPACE_DLX:workspace-service.events.dlx}
+  dead-letter-queue: ${WORKSPACE_DLQ:workspace-service.events.dlq}
+  dead-letter-routing-key: ${WORKSPACE_DLQ_ROUTING_KEY:workspace-service.events.failed}
+  max-attempts: ${WORKSPACE_MAX_ATTEMPTS:3}
+  retry-backoff-ms: ${WORKSPACE_RETRY_BACKOFF_MS:1000}
+  routing-keys:
+    - user.registered
 
 rabbitmq:
   url: ${RABBITMQ_URL:amqp://guest:guest@localhost:5672/}
