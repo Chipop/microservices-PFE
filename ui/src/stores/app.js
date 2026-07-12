@@ -52,6 +52,10 @@ export const useAppStore = defineStore('app', () => {
         currentWorkspaceId.value = id;
         await loadWorkspaceData();
     }
+    function setWorkspaceSelection(rows, selectedId) {
+        workspaces.value = rows;
+        currentWorkspaceId.value = selectedId;
+    }
     function toggleSidebar() { sidebarCollapsed.value = !sidebarCollapsed.value; }
     async function createTask(input) {
         const task = await taskRepository.create({ ...input, workspaceId: currentWorkspaceId.value });
@@ -98,7 +102,7 @@ export const useAppStore = defineStore('app', () => {
         tasks.value = [];
         error.value = '';
     }
-    return { currentUser, workspaces, currentWorkspaceId, currentWorkspace, projects, currentProjects, tasks, sidebarCollapsed, loading, globalQuery, error, initialize, loadWorkspaceData, switchWorkspace, toggleSidebar, createTask, updateTask, createProject, hydrateTaskDetails, addComment, reset };
+    return { currentUser, workspaces, currentWorkspaceId, currentWorkspace, projects, currentProjects, tasks, sidebarCollapsed, loading, globalQuery, error, initialize, loadWorkspaceData, switchWorkspace, setWorkspaceSelection, toggleSidebar, createTask, updateTask, createProject, hydrateTaskDetails, addComment, reset };
 });
 function withTaskMetrics(projects, tasks) {
     return projects.map(project => {

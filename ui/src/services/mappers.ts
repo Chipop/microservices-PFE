@@ -34,6 +34,7 @@ export function workspaceToView(dto: WorkspaceDto): Workspace {
     description: dto.description ?? '',
     memberCount: 1,
     role: dto.currentUserRole,
+    workspaceType: dto.workspaceType,
   }
 }
 

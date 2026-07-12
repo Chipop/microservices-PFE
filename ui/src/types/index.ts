@@ -18,6 +18,7 @@ export interface Workspace {
   description: string
   memberCount: number
   role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER'
+  workspaceType: 'PERSONAL' | 'TEAM'
 }
 
 export interface Project {

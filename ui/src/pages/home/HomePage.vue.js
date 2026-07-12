@@ -5,6 +5,7 @@ import { useNotificationStore } from '@/stores/notifications';
 import TaskRow from '@/components/task/TaskRow.vue';
 const app = useAppStore();
 const notifications = useNotificationStore();
+const greetingName = computed(() => app.currentUser.name || app.currentUser.username);
 const assigned = computed(() => app.tasks.filter(t => t.assignee?.id === app.currentUser.id && t.status !== 'Done').slice(0, 5));
 const dueSoon = computed(() => app.tasks.filter(t => t.dueDate && t.status !== 'Done').slice(0, 4));
 const __VLS_ctx = {
@@ -30,6 +31,7 @@ __VLS_asFunctionalElement1(__VLS_intrinsics.p, __VLS_intrinsics.p)({
 /** @type {__VLS_StyleScopedClasses['eyebrow']} */ ;
 (__VLS_ctx.app.currentWorkspace?.name);
 __VLS_asFunctionalElement1(__VLS_intrinsics.h1, __VLS_intrinsics.h1)({});
+(__VLS_ctx.greetingName);
 __VLS_asFunctionalElement1(__VLS_intrinsics.p, __VLS_intrinsics.p)({});
 __VLS_asFunctionalElement1(__VLS_intrinsics.div, __VLS_intrinsics.div)({
     ...{ class: "header-actions" },
@@ -60,7 +62,7 @@ const __VLS_8 = __VLS_7({
     size: (16),
 }, ...__VLS_functionalComponentArgsRest(__VLS_7));
 // @ts-ignore
-[app,];
+[app, greetingName,];
 var __VLS_3;
 __VLS_asFunctionalElement1(__VLS_intrinsics.button, __VLS_intrinsics.button)({
     ...{ class: "btn btn-primary" },

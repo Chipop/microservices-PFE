@@ -5,8 +5,8 @@ export const users = [
     { id: 'u4', name: 'Yasmine Alaoui', username: 'yasmine', email: 'yasmine@flowforge.local', initials: 'YA', role: 'QA engineer' }
 ];
 export const workspaces = [
-    { id: 'w1', name: 'FlowForge Platform', key: 'FF', description: 'Product and engineering workspace', memberCount: 12, role: 'OWNER' },
-    { id: 'w2', name: 'University Lab', key: 'UL', description: 'Academic projects and research', memberCount: 6, role: 'ADMIN' }
+    { id: 'w1', name: 'FlowForge Platform', key: 'FF', description: 'Product and engineering workspace', memberCount: 12, role: 'OWNER', workspaceType: 'PERSONAL' },
+    { id: 'w2', name: 'University Lab', key: 'UL', description: 'Academic projects and research', memberCount: 6, role: 'ADMIN', workspaceType: 'TEAM' }
 ];
 export const projects = [
     { id: 'p1', workspaceId: 'w1', key: 'PLAT', name: 'Platform Core', description: 'Core microservices, gateway and infrastructure.', color: '#00a9ad', lead: users[0], favorite: true, updatedAt: '10 min ago', taskCount: 34, completedCount: 19 },

@@ -12,7 +12,7 @@ const password = ref('')
 
 async function submit() {
   await auth.register(username.value, email.value, password.value)
-  router.push('/home')
+  router.push('/preparing-workspace')
 }
 </script>
 

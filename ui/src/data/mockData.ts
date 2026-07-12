@@ -8,8 +8,8 @@ export const users: User[] = [
 ]
 
 export const workspaces: Workspace[] = [
-  { id: 'w1', name: 'FlowForge Platform', key: 'FF', description: 'Product and engineering workspace', memberCount: 12, role: 'OWNER' },
-  { id: 'w2', name: 'University Lab', key: 'UL', description: 'Academic projects and research', memberCount: 6, role: 'ADMIN' }
+  { id: 'w1', name: 'FlowForge Platform', key: 'FF', description: 'Product and engineering workspace', memberCount: 12, role: 'OWNER', workspaceType: 'PERSONAL' },
+  { id: 'w2', name: 'University Lab', key: 'UL', description: 'Academic projects and research', memberCount: 6, role: 'ADMIN', workspaceType: 'TEAM' }
 ]
 
 export const projects: Project[] = [

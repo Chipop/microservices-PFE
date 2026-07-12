@@ -59,6 +59,7 @@ export const useAuthStore = defineStore('auth', () => {
         loading.value = true;
         try {
             profile.value = await profilesApi.me();
+            return profile.value;
         }
         finally {
             loading.value = false;

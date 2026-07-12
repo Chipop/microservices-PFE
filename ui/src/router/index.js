@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/auth';
 import AppShell from '@/components/layout/AppShell.vue';
 import LoginPage from '@/pages/auth/LoginPage.vue';
 import RegisterPage from '@/pages/auth/RegisterPage.vue';
+import PreparingWorkspacePage from '@/pages/auth/PreparingWorkspacePage.vue';
 import HomePage from '@/pages/home/HomePage.vue';
 import ProjectsPage from '@/pages/projects/ProjectsPage.vue';
 import NewProjectPage from '@/pages/projects/NewProjectPage.vue';
@@ -28,6 +29,7 @@ import NotFoundPage from '@/pages/NotFoundPage.vue';
 const routes = [
     { path: '/', redirect: '/home' },
     { path: '/login', component: LoginPage, meta: { guestOnly: true } }, { path: '/register', component: RegisterPage, meta: { guestOnly: true } }, { path: '/forgot-password', component: LoginPage, meta: { guestOnly: true } },
+    { path: '/preparing-workspace', component: PreparingWorkspacePage, meta: { requiresAuth: true } },
     { path: '/', component: AppShell, meta: { requiresAuth: true }, children: [
             { path: 'home', component: HomePage }, { path: 'projects', component: ProjectsPage }, { path: 'projects/new', component: NewProjectPage },
             { path: 'projects/:id', component: ProjectLayout, children: [{ path: '', redirect: (to) => `/projects/${to.params.id}/overview` }, { path: 'overview', component: ProjectOverview }, { path: 'board', component: ProjectBoard }, { path: 'list', component: ProjectList }, { path: 'timeline', component: ProjectTimeline }, { path: 'backlog', component: ProjectBacklog }, { path: 'files', component: ProjectFiles }, { path: 'settings', component: ProjectSettings }] },

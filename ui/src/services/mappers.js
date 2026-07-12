@@ -21,6 +21,7 @@ export function workspaceToView(dto) {
         description: dto.description ?? '',
         memberCount: 1,
         role: dto.currentUserRole,
+        workspaceType: dto.workspaceType,
     };
 }
 export function projectToView(dto, lead) {
