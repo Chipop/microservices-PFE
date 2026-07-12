@@ -24,7 +24,7 @@ single-page frontend.
    (Postgres)                       (Postgres)                       (Postgres)
    one database per service — separate containers & volumes, share nothing
 
-  On register, auth-service calls the gateway → user-service to create the profile (réception).
+  On register, auth-service publishes `user.registered`; profile, workspace, and email consumers react asynchronously.
   Every service validates the same JWT, signed with one shared HS256 secret (`user_id` claim).
 ```
 
@@ -65,18 +65,18 @@ right service and passes CORS headers through. Clients only ever talk to `:8080`
 
 ### `server/auth-service/` — Auth service (port 8002, Django)
 Owns user accounts and credentials. Issues JWTs. Persists to its own `auth-db` Postgres container.
-- `POST /api/auth/register/` — create an account (then calls the gateway to create the matching profile)
+- `POST /api/auth/register/` — create an account and publish `user.registered`
 - `POST /api/auth/login/` — returns `{ access, refresh }`
 - `POST /api/auth/refresh/` — new access token from a refresh token
 
 ### `server/user-service/` — User/Profile service (port 8001, Django)
 Owns user profile metadata and profile-picture storage integration. A profile is
-created via an internal call carrying the `X-Internal-Key`; authenticated users
-can read and update safe profile fields. Persists metadata to its own `users-db`
+created by consuming `user.registered`; authenticated users can read and update
+safe profile fields. Persists metadata to its own `users-db`
 Postgres container and stores profile-picture objects through the configured
 storage backend.
 - `GET /api/profiles/` — returns the caller's own profile (JWT-scoped)
-- `POST /api/profiles/` — internal only (used by auth-service during registration)
+- `POST /api/profiles/` — internal profile creation endpoint
 - `PATCH /api/profiles/{id}/` — update safe profile fields
 - `GET /api/profiles/public/{username}/` — public profile fields
 - `POST / PUT / DELETE /api/profiles/picture/` — upload, replace, or remove profile picture

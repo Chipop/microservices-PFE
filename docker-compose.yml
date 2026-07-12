@@ -163,6 +163,12 @@ services:
       - PROFILE_PICTURE_KEY_PREFIX=profile-pictures
       - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
       - RABBITMQ_EXCHANGE=flowforge.events
+      - USER_EVENTS_QUEUE=user-service.events
+      - USER_EVENTS_DLX=user-service.events.dlx
+      - USER_EVENTS_DLQ=user-service.events.dlq
+      - USER_EVENTS_DLQ_ROUTING_KEY=user-service.events.failed
+      - USER_EVENTS_MAX_ATTEMPTS=3
+      - USER_EVENTS_RETRY_BACKOFF_MS=1000
     volumes:
       - ./server/user-service:/app
     ports:
@@ -180,8 +186,6 @@ services:
     environment:
       - JWT_SIGNING_KEY=this-is-a-much-longer-shared-secret-key-32plus
       - INTERNAL_API_KEY=INTERNAL-CHANGE-ME
-      # Auth reaches the Profiles service THROUGH the gateway (réception call).
-      - GATEWAY_URL=http://api-gateway
       - POSTGRES_HOST=auth-db
       - POSTGRES_PORT=5432
       - POSTGRES_DB=auth
@@ -254,6 +258,13 @@ services:
       - WORKSPACE_INVITATION_TTL_HOURS=168
       - CORS_ALLOWED_ORIGINS=*
       - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
+      - RABBITMQ_EXCHANGE=flowforge.events
+      - WORKSPACE_QUEUE=workspace-service.events
+      - WORKSPACE_DLX=workspace-service.events.dlx
+      - WORKSPACE_DLQ=workspace-service.events.dlq
+      - WORKSPACE_DLQ_ROUTING_KEY=workspace-service.events.failed
+      - WORKSPACE_MAX_ATTEMPTS=3
+      - WORKSPACE_RETRY_BACKOFF_MS=1000
     ports:
       - "8004:8000"
     depends_on:
