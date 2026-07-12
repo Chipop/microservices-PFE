@@ -112,6 +112,7 @@ Published after a task is created.
   "resource": { "type": "task", "id": 42 },
   "data": {
     "taskId": 42,
+    "projectId": 3,
     "workspaceId": 7,
     "ownerUserId": 1,
     "authorUserId": 1,
@@ -139,6 +140,7 @@ Published after a task update is saved.
   "resource": { "type": "task", "id": 42 },
   "data": {
     "taskId": 42,
+    "projectId": 3,
     "workspaceId": 7,
     "ownerUserId": 1,
     "authorUserId": 1,
@@ -166,6 +168,7 @@ Published after a task is soft-deleted.
   "resource": { "type": "task", "id": 42 },
   "data": {
     "taskId": 42,
+    "projectId": 3,
     "workspaceId": 7
   }
 }
@@ -183,6 +186,7 @@ Published after an assignment row is created.
   "resource": { "type": "task", "id": 42 },
   "data": {
     "taskId": 42,
+    "projectId": 3,
     "workspaceId": 7,
     "assigneeUserId": 9,
     "assignedByUserId": 1
@@ -202,6 +206,7 @@ Published when a task transitions from incomplete to complete.
   "resource": { "type": "task", "id": 42 },
   "data": {
     "taskId": 42,
+    "projectId": 3,
     "workspaceId": 7,
     "title": "Prepare release",
     "completedAt": "2026-07-12T12:00:00.000Z"
@@ -222,6 +227,7 @@ Published after a task comment is created.
   "data": {
     "commentId": 101,
     "taskId": 42,
+    "projectId": 3,
     "workspaceId": 7,
     "authorUserId": 1,
     "body": "Backend implementation is ready for review.",
@@ -249,10 +255,25 @@ Published after a task comment is soft-deleted.
   "data": {
     "commentId": 101,
     "taskId": 42,
+    "projectId": 3,
     "workspaceId": 7
   }
 }
 ```
+
+### `project-service`
+
+Project events use the same envelope and publish non-sensitive lifecycle/access
+changes:
+
+- `project.created`
+- `project.updated`
+- `project.archived`
+- `project.deleted`
+- `project.invited`
+- `project.member_role_changed`
+
+Invitation tokens are not published.
 
 ### `workspace-service`
 

@@ -2,13 +2,13 @@
 
 ## Purpose
 
-`task-service` owns workspace-scoped task management and task comments. It
+`task-service` owns project-scoped task management and task comments. It
 replaces the former simple todo runtime and exposes the public gateway contract
 under `/api/tasks/`.
 
 The service is stateless for authentication. It validates the JWT access token
-issued by `auth-service`, extracts the `user_id` claim, and checks workspace
-visibility/contribution permissions through `workspace-service`.
+issued by `auth-service`, extracts the `user_id` claim, and checks project
+visibility/contribution permissions through `project-service`.
 
 ## Runtime
 
@@ -28,7 +28,7 @@ visibility/contribution permissions through `workspace-service`.
 - Manage statuses, priorities, deadlines, tags, subtasks, dependencies,
   recurrence configuration, reminders, Kanban columns, and saved filters.
 - Assign tasks by auth user id.
-- Validate task permissions through workspace visibility and contribution rules.
+- Validate task permissions through project visibility and contribution rules.
 - Hide cross-user tasks by returning `404`.
 - Publish RabbitMQ domain events for task create, update, assignment, and
   completion.
@@ -54,8 +54,9 @@ these tables directly.
 - `kanban_columns`
 - `saved_filters`
 
-Tasks store `workspace_id` and `author_user_id`. Assignments store auth user IDs
-only. The service does not store passwords, tokens, or user profile data.
+Tasks store mandatory `project_id`, denormalized `workspace_id`, and
+`author_user_id`. Assignments store auth user IDs only. The service does not
+store passwords, tokens, or user profile data.
 
 ## Public API
 
@@ -69,20 +70,20 @@ Core task routes:
 
 | Method | Path | Description |
 |---|---:|---|
-| `GET` | `/api/tasks/` | List active tasks in workspaces visible to the JWT user. |
+| `GET` | `/api/tasks/` | List active tasks in projects visible to the JWT user. |
 | `POST` | `/api/tasks/` | Create a task. |
 | `GET` | `/api/tasks/{id}/` | Read one visible task. |
 | `PATCH` | `/api/tasks/{id}/` | Update one task where the caller can contribute. |
-| `DELETE` | `/api/tasks/{id}/` | Soft-delete one task if caller is author or workspace admin. |
+| `DELETE` | `/api/tasks/{id}/` | Soft-delete one task if caller is author or project admin. |
 | `POST` | `/api/tasks/{id}/complete` | Mark a task complete. |
 | `POST` | `/api/tasks/{id}/archive` | Archive a task without deleting it. |
 | `GET` | `/api/tasks/{id}/permissions` | Permission summary for other services. |
 
-The former simple payload still works through `/api/tasks/`:
+Create payload:
 
 ```json
 {
-  "workspace_id": 1,
+  "project_id": 1,
   "title": "first task",
   "done": false
 }
@@ -93,6 +94,7 @@ Task responses include a derived `done` boolean for frontend compatibility:
 ```json
 {
   "id": 1,
+  "project_id": 1,
   "workspace_id": 1,
   "author_user_id": 1,
   "title": "first task",
@@ -125,6 +127,8 @@ Supporting routes:
 ## Validation
 
 - Unknown payload fields are rejected.
+- `project_id` is required on create and must point to a project where the
+  caller can contribute.
 - `title` is required on create and limited to 200 characters.
 - `priority` must be one of `low`, `normal`, `high`, `urgent`.
 - Deadlines and reminders must be ISO datetime strings.
@@ -146,6 +150,7 @@ Supporting routes:
 | `POSTGRES_PASSWORD` | In Compose | DB password, defaults to `todo`. |
 | `TASK_SCHEMA_SYNC` | No | Local schema sync toggle. Use `false` in production. |
 | `WORKSPACE_SERVICE_BASE_URL` | In Compose | Internal workspace-service URL. |
+| `PROJECT_SERVICE_BASE_URL` | In Compose | Internal project-service URL. |
 | `RABBITMQ_URL` | No | AMQP URL for domain event publishing. |
 | `RABBITMQ_EXCHANGE` | No | Topic exchange for domain events, defaults to `flowforge.events`. |
 

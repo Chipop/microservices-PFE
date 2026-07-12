@@ -60,6 +60,7 @@ const DEFAULT_COLUMNS = [
 
 export interface TaskResponse {
   id: number;
+  project_id: number | null;
   workspace_id: number | null;
   author_user_id: number;
   title: string;
@@ -95,14 +96,20 @@ export interface SearchSnapshotPage {
   hasNext: boolean;
 }
 
-interface WorkspacePermission {
+interface ProjectPermission {
+  projectId: number;
   workspaceId: number;
-  visibility: 'PRIVATE' | 'PUBLIC';
-  isMember: boolean;
-  role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER' | null;
+  workspaceName: string;
+  projectRole: 'PROJECT_OWNER' | 'PROJECT_ADMIN' | 'CONTRIBUTOR' | 'VIEWER' | null;
   canView: boolean;
   canContribute: boolean;
   canAdmin: boolean;
+  canDelete: boolean;
+}
+
+interface ProjectSummary {
+  id: number;
+  workspace_id: number;
 }
 
 interface WorkspaceSummary {
@@ -144,16 +151,17 @@ export class TasksService {
   async findAll(user: { userId: number; token: string }, query: ListTasksQueryDto): Promise<TaskResponse[]> {
     const userId = user.userId;
     await this.ensureDefaults(userId);
+    await this.migrateVisibleLegacyTasks(user);
     let where: FindOptionsWhere<Task>[] | FindOptionsWhere<Task>;
-    if (query.workspace_id) {
-      await this.requireWorkspacePermission(user, query.workspace_id, 'view');
-      where = { workspace_id: query.workspace_id, deleted_at: IsNull() };
+    if (query.project_id) {
+      await this.requireProjectPermission(user, query.project_id, 'view');
+      where = { project_id: query.project_id, deleted_at: IsNull() };
+    } else if (query.workspace_id) {
+      const visibleProjectIds = await this.visibleProjectIds(user, query.workspace_id);
+      where = { project_id: In(visibleProjectIds), deleted_at: IsNull() };
     } else {
-      const visibleWorkspaceIds = await this.visibleWorkspaceIds(user);
-      where = [
-        { workspace_id: In(visibleWorkspaceIds), deleted_at: IsNull() },
-        { workspace_id: IsNull(), owner_user_id: userId, deleted_at: IsNull() },
-      ];
+      const visibleProjectIds = await this.visibleProjectIds(user);
+      where = { project_id: In(visibleProjectIds), deleted_at: IsNull() };
     }
     const applyFilters = (item: FindOptionsWhere<Task>) => {
       if (!query.include_archived) item.archived_at = IsNull();
@@ -174,8 +182,7 @@ export class TasksService {
   async create(user: { userId: number; token: string }, dto: CreateTaskDto): Promise<TaskResponse> {
     const userId = user.userId;
     await this.ensureDefaults(userId);
-    const workspaceId = dto.workspace_id ?? (await this.personalWorkspaceId(user));
-    await this.requireWorkspacePermission(user, workspaceId, 'contribute');
+    const project = await this.requireProjectPermission(user, dto.project_id, 'contribute');
     const status = dto.status_id
       ? await this.getOwnedStatus(userId, dto.status_id)
       : await this.getStatusBySlug(userId, dto.done ? 'done' : 'todo');
@@ -186,7 +193,8 @@ export class TasksService {
     const task = this.tasks.create({
       owner_user_id: userId,
       author_user_id: userId,
-      workspace_id: workspaceId,
+      project_id: dto.project_id,
+      workspace_id: project.workspaceId,
       title: dto.title,
       description: dto.description ?? '',
       status_id: status.id,
@@ -216,6 +224,9 @@ export class TasksService {
     const task = await this.getContributableTask(user, id);
     const wasCompleted = Boolean(task.completed_at || task.status?.slug === 'done');
 
+    if (dto.project_id !== undefined && dto.project_id !== task.project_id) {
+      throw new BadRequestException('Task project cannot be changed.');
+    }
     if (dto.title !== undefined) task.title = dto.title;
     if (dto.description !== undefined) task.description = dto.description;
     if (dto.priority !== undefined) task.priority = dto.priority;
@@ -268,7 +279,7 @@ export class TasksService {
 
   async remove(user: { userId: number; token: string }, id: number): Promise<void> {
     const task = await this.getVisibleTask(user, id);
-    await this.requireDeletePermission(user, task.author_user_id ?? task.owner_user_id, task.workspace_id);
+    await this.requireDeletePermission(user, task.author_user_id ?? task.owner_user_id, task.project_id);
     task.deleted_at = new Date();
     task.deleted_by_user_id = user.userId;
     await this.tasks.save(task);
@@ -605,7 +616,7 @@ export class TasksService {
   async removeComment(user: { userId: number; token: string }, taskId: number, commentId: number): Promise<void> {
     const task = await this.getVisibleTask(user, taskId);
     const comment = await this.getVisibleComment(taskId, commentId);
-    await this.requireDeletePermission(user, comment.author_user_id, task.workspace_id);
+    await this.requireDeletePermission(user, comment.author_user_id, task.project_id);
     comment.deleted_at = new Date();
     comment.deleted_by_user_id = user.userId;
     await this.comments.save(comment);
@@ -658,12 +669,13 @@ export class TasksService {
   async commentPermission(user: { userId: number; token: string }, taskId: number, commentId: number) {
     const task = await this.getVisibleTask(user, taskId);
     const comment = await this.getVisibleComment(taskId, commentId);
-    const permission = task.workspace_id
-      ? await this.workspacePermission(user, task.workspace_id)
+    const permission = task.project_id
+      ? await this.projectPermission(user, task.project_id)
       : null;
     return {
       taskId,
       commentId,
+      project_id: task.project_id,
       workspace_id: task.workspace_id,
       author_user_id: comment.author_user_id,
       canView: true,
@@ -675,12 +687,13 @@ export class TasksService {
 
   async taskPermission(user: { userId: number; token: string }, taskId: number) {
     const task = await this.getVisibleTask(user, taskId);
-    const permission = task.workspace_id
-      ? await this.workspacePermission(user, task.workspace_id)
+    const permission = task.project_id
+      ? await this.projectPermission(user, task.project_id)
       : null;
     const authorId = task.author_user_id ?? task.owner_user_id;
     return {
       taskId,
+      project_id: task.project_id,
       workspace_id: task.workspace_id,
       author_user_id: authorId,
       canView: true,
@@ -693,6 +706,7 @@ export class TasksService {
   private toResponse(task: Task): TaskResponse {
     return {
       id: task.id,
+      project_id: task.project_id,
       workspace_id: task.workspace_id,
       author_user_id: task.author_user_id ?? task.owner_user_id,
       title: task.title,
@@ -755,6 +769,7 @@ export class TasksService {
     return {
       taskId: task.id,
       resourceId: task.id,
+      projectId: task.project_id,
       workspaceId: task.workspace_id,
       authorUserId: task.author_user_id,
       ownerUserId: task.author_user_id,
@@ -785,6 +800,7 @@ export class TasksService {
       commentId: comment.id,
       resourceId: comment.id,
       taskId: comment.task_id,
+      projectId: task.project_id,
       workspaceId: task.workspace_id,
       authorUserId: comment.author_user_id,
       body: comment.body,
@@ -822,21 +838,18 @@ export class TasksService {
       relations: this.taskRelations(),
     });
     if (!task) throw new NotFoundException('Task not found');
-    if (task.workspace_id == null) {
-      if (task.owner_user_id !== user.userId) throw new NotFoundException('Task not found');
-      return task;
+    if (task.project_id == null) {
+      await this.attachDefaultProject(user, task);
     }
-    await this.requireWorkspacePermission(user, task.workspace_id, 'view');
+    if (!task.project_id) throw new NotFoundException('Task not found');
+    await this.requireProjectPermission(user, task.project_id, 'view');
     return task;
   }
 
   private async getContributableTask(user: { userId: number; token: string }, id: number): Promise<Task> {
     const task = await this.getVisibleTask(user, id);
-    if (task.workspace_id == null) {
-      if (task.owner_user_id !== user.userId) throw new ForbiddenException('Task access denied.');
-      return task;
-    }
-    await this.requireWorkspacePermission(user, task.workspace_id, 'contribute');
+    if (!task.project_id) throw new ForbiddenException('Task access denied.');
+    await this.requireProjectPermission(user, task.project_id, 'contribute');
     return task;
   }
 
@@ -899,67 +912,100 @@ export class TasksService {
     }
   }
 
+  private async visibleProjectIds(user: { userId: number; token: string }, workspaceId?: number): Promise<number[]> {
+    const suffix = workspaceId ? `?workspace_id=${workspaceId}` : '';
+    const response = await fetch(`${this.projectBaseUrl()}/api/projects${suffix}`, {
+      headers: { Authorization: `Bearer ${user.token}` },
+    });
+    if (!response.ok) {
+      throw new ForbiddenException('Project access check failed.');
+    }
+    const projects = (await response.json()) as ProjectSummary[];
+    return projects.map((project) => project.id);
+  }
+
+  private async migrateVisibleLegacyTasks(user: { userId: number; token: string }): Promise<void> {
+    const visibleWorkspaceIds = await this.visibleWorkspaceIds(user);
+    if (!visibleWorkspaceIds.length) return;
+    const rows = await this.tasks.find({
+      where: { project_id: IsNull(), workspace_id: In(visibleWorkspaceIds), deleted_at: IsNull() },
+      take: 200,
+    });
+    for (const task of rows) {
+      await this.attachDefaultProject(user, task);
+    }
+  }
+
   private async visibleWorkspaceIds(user: { userId: number; token: string }): Promise<number[]> {
     const response = await fetch(`${this.workspaceBaseUrl()}/api/workspaces/`, {
       headers: { Authorization: `Bearer ${user.token}` },
     });
-    if (!response.ok) {
-      throw new ForbiddenException('Workspace access check failed.');
-    }
+    if (!response.ok) return [];
     const workspaces = (await response.json()) as WorkspaceSummary[];
     return workspaces.map((workspace) => workspace.id);
   }
 
-  private async personalWorkspaceId(user: { userId: number; token: string }): Promise<number> {
-    const response = await fetch(`${this.workspaceBaseUrl()}/api/workspaces/`, {
-      headers: { Authorization: `Bearer ${user.token}` },
-    });
-    if (!response.ok) {
-      throw new ForbiddenException('Could not resolve personal workspace.');
-    }
-    const workspaces = (await response.json()) as WorkspaceSummary[];
-    const personal = workspaces.find((workspace) => workspace.workspaceType === 'PERSONAL');
-    if (!personal) throw new NotFoundException('Personal workspace not found');
-    return personal.id;
-  }
-
-  private async requireWorkspacePermission(
+  private async requireProjectPermission(
     user: { userId: number; token: string },
-    workspaceId: number,
+    projectId: number,
     action: 'view' | 'contribute',
-  ): Promise<WorkspacePermission> {
-    const permission = await this.workspacePermission(user, workspaceId);
-    if (action === 'view' && !permission.canView) throw new NotFoundException('Workspace not found');
+  ): Promise<ProjectPermission> {
+    const permission = await this.projectPermission(user, projectId);
+    if (action === 'view' && !permission.canView) throw new NotFoundException('Project not found');
     if (action === 'contribute' && !permission.canContribute) {
-      throw new ForbiddenException('Workspace contribution permission required.');
+      throw new ForbiddenException('Project contribution permission required.');
     }
     return permission;
   }
 
-  private async workspacePermission(
+  private async projectPermission(
     user: { userId: number; token: string },
-    workspaceId: number,
-  ): Promise<WorkspacePermission> {
-    const response = await fetch(`${this.workspaceBaseUrl()}/api/workspaces/${workspaceId}/permissions/me`, {
+    projectId: number,
+  ): Promise<ProjectPermission> {
+    const response = await fetch(`${this.projectBaseUrl()}/api/projects/${projectId}/permissions/me`, {
       headers: { Authorization: `Bearer ${user.token}` },
     });
-    if (response.status === 404) throw new NotFoundException('Workspace not found');
-    if (response.status === 403 || response.status === 401) throw new ForbiddenException('Workspace access denied.');
-    if (!response.ok) throw new ForbiddenException('Workspace access check failed.');
-    return (await response.json()) as WorkspacePermission;
+    if (response.status === 404) throw new NotFoundException('Project not found');
+    if (response.status === 403 || response.status === 401) throw new ForbiddenException('Project access denied.');
+    if (!response.ok) throw new ForbiddenException('Project access check failed.');
+    return (await response.json()) as ProjectPermission;
   }
 
   private async requireDeletePermission(
     user: { userId: number; token: string },
     authorUserId: number,
-    workspaceId: number | null,
+    projectId: number | null,
   ): Promise<void> {
     if (authorUserId === user.userId) return;
-    if (workspaceId != null) {
-      const permission = await this.workspacePermission(user, workspaceId);
-      if (permission.canAdmin) return;
+    if (projectId != null) {
+      const permission = await this.projectPermission(user, projectId);
+      if (permission.canDelete) return;
     }
-    throw new ForbiddenException('Only the original author or workspace admin can delete this resource.');
+    throw new ForbiddenException('Only the original author or project admin can delete this resource.');
+  }
+
+  private async attachDefaultProject(user: { userId: number; token: string }, task: Task): Promise<void> {
+    if (!task.workspace_id) throw new NotFoundException('Task not found');
+    const response = await fetch(`${this.projectBaseUrl()}/api/projects/internal/default`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Internal-Key': this.config.get<string>('INTERNAL_API_KEY', ''),
+      },
+      body: JSON.stringify({
+        workspace_id: task.workspace_id,
+        author_user_id: task.author_user_id ?? task.owner_user_id ?? user.userId,
+      }),
+    });
+    if (!response.ok) throw new ForbiddenException('Could not migrate task to a default project.');
+    const project = (await response.json()) as ProjectSummary;
+    task.project_id = project.id;
+    task.workspace_id = project.workspace_id;
+    await this.tasks.save(task);
+  }
+
+  private projectBaseUrl(): string {
+    return this.config.get<string>('PROJECT_SERVICE_BASE_URL', 'http://project-service:8000').replace(/\/+$/, '');
   }
 
   private workspaceBaseUrl(): string {

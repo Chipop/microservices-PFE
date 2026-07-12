@@ -13,7 +13,7 @@ public class EventDocumentMapper {
     public Map<String, Object> taskDocument(DomainEvent event) {
         var data = data(event);
         var document = base("task", longValue(data, "taskId", resourceId(event)));
-        copy(document, data, "workspaceId", "ownerUserId", "authorUserId", "title", "description", "priority", "updatedAt");
+        copy(document, data, "projectId", "workspaceId", "ownerUserId", "authorUserId", "title", "description", "priority", "updatedAt");
         document.put("status", firstPresent(data, "status", "statusSlug"));
         document.put("tags", stringList(data.get("tags")));
         document.put("viewerUserIds", longList(firstPresent(data, "viewerUserIds", "memberUserIds")));
@@ -29,6 +29,14 @@ public class EventDocumentMapper {
         return document;
     }
 
+    public Map<String, Object> projectDocument(DomainEvent event) {
+        var data = data(event);
+        var document = base("project", longValue(data, "projectId", resourceId(event)));
+        copy(document, data, "projectId", "workspaceId", "ownerUserId", "authorUserId", "name", "description", "archivedAt", "deletedAt", "updatedAt");
+        document.put("title", data.getOrDefault("name", ""));
+        return document;
+    }
+
     public Map<String, Object> userDocument(DomainEvent event) {
         var data = data(event);
         var document = base("user", longValue(data, "authUserId", resourceId(event)));
@@ -41,7 +49,7 @@ public class EventDocumentMapper {
     public Map<String, Object> commentDocument(DomainEvent event) {
         var data = data(event);
         var document = base("comment", longValue(data, "commentId", resourceId(event)));
-        copy(document, data, "commentId", "taskId", "workspaceId", "authorUserId", "body", "updatedAt");
+        copy(document, data, "commentId", "taskId", "projectId", "workspaceId", "authorUserId", "body", "updatedAt");
         document.put("title", "Comment on task " + data.getOrDefault("taskId", ""));
         document.put("viewerUserIds", longList(firstPresent(data, "viewerUserIds", "memberUserIds")));
         return document;

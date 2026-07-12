@@ -47,6 +47,9 @@ public class SearchIndexService {
             case "workspace.created", "workspace.updated", "workspace.access_updated" ->
                     upsert(indexNames.workspaces(), id(event), mapper.workspaceDocument(event));
             case "workspace.deleted" -> delete(indexNames.workspaces(), id(event));
+            case "project.created", "project.updated", "project.archived", "project.invited", "project.member_role_changed" ->
+                    upsert(indexNames.projects(), id(event), mapper.projectDocument(event));
+            case "project.deleted" -> delete(indexNames.projects(), id(event));
             case "user.profile.created", "user.profile.updated" -> upsert(indexNames.users(), id(event), mapper.userDocument(event));
             default -> logger.debug("Ignoring unsupported search event {}", event.eventType());
         }
@@ -64,6 +67,7 @@ public class SearchIndexService {
         Long id = event.resource() == null ? null : event.resource().id();
         if (id == null && event.data() != null) {
             Object candidate = event.data().get("taskId");
+            if (candidate == null) candidate = event.data().get("projectId");
             if (candidate == null) candidate = event.data().get("workspaceId");
             if (candidate == null) candidate = event.data().get("authUserId");
             if (candidate == null) candidate = event.data().get("commentId");

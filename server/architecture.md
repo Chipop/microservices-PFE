@@ -24,6 +24,7 @@ not hardcode them.
 | `/api/profiles/**` | `user-service` | `8001` | User profile metadata and public profiles |
 | `/api/tasks/**` | `task-service` | `8003` | Tasks, comments, assignments, tags, reminders, statuses |
 | `/api/workspaces/**` | `workspace-service` | `8004` | Workspaces, membership, invitations, permissions |
+| `/api/projects/**` | `project-service` | `8009` | Workspace projects, project-only invitations, project permissions |
 | `/api/attachments/**` | `attachment-service` | `8005` | Task/comment file metadata and signed download links |
 | `/api/notifications/**` | `notification-service` | `8006` | In-app notification history and read/delete actions |
 | `/ws/notifications` | `notification-service` | `8006` | Realtime notification socket |
@@ -143,8 +144,8 @@ Base path: `/api/tasks`
 
 | Method | Path | Auth | Body / query | Response / behavior |
 |---|---|---|---|---|
-| `GET` | `/` | Yes | optional filters | Lists visible tasks. |
-| `POST` | `/` | Yes | task create DTO | Creates a task in the requested or personal workspace. |
+| `GET` | `/` | Yes | optional `project_id`, `workspace_id`, filters | Lists visible project tasks. |
+| `POST` | `/` | Yes | task create DTO with `project_id` | Creates a task in the requested project. |
 | `GET` | `/{id}` | Yes | none | Loads one visible task. |
 | `PATCH` | `/{id}` | Yes | partial task DTO | Updates task fields. |
 | `DELETE` | `/{id}` | Yes | none | Soft-deletes task. |
@@ -154,7 +155,7 @@ Base path: `/api/tasks`
 
 Task response fields include:
 
-- `id`, `workspace_id`, `author_user_id`
+- `id`, `project_id`, `workspace_id`, `author_user_id`
 - `title`, `description`, `done`, `priority`
 - `due_at`, `completed_at`, `archived_at`, `deleted_at`
 - `status`, `kanban_column`
@@ -207,9 +208,43 @@ Task response fields include:
 
 Frontend notes:
 
-- Use `workspace_id` when creating/listing workspace-scoped tasks.
+- Use `project_id` when creating tasks. `workspace_id` remains available for
+  filtering and event payloads, but it is derived from the project.
 - Task events power search and some notifications, but frontend should still
   update local task state from REST responses.
+
+## Project Service
+
+Owns projects, project role overlays, and project-only invitation workflows.
+Projects belong to workspaces and tasks belong to projects.
+
+Base path: `/api/projects`
+
+| Method | Path | Auth | Body / query | Response / behavior |
+|---|---|---|---|---|
+| `GET` | `/` | Yes | optional `workspace_id` | Lists projects visible to the caller. |
+| `POST` | `/` | Yes | `{ "workspace_id", "name", "description?" }` | Creates a project; caller becomes project owner. |
+| `GET` | `/{projectId}` | Yes | none | Loads one visible project. |
+| `PATCH` | `/{projectId}` | Yes | `{ "name?", "description?" }` | Updates project admin fields; workspace cannot change. |
+| `DELETE` | `/{projectId}` | Yes | none | Soft-deletes project when caller is author or admin. |
+| `POST` | `/{projectId}/archive` | Yes | none | Archives project when caller is author or admin. |
+| `GET` | `/{projectId}/permissions/me` | Yes | none | Permission booleans for current user. |
+
+Project roles:
+
+- `PROJECT_OWNER`, `PROJECT_ADMIN`, `CONTRIBUTOR`, `VIEWER`.
+- Workspace roles are inherited, but explicit project membership can grant
+  access to one project without workspace membership.
+
+Project invitation endpoints:
+
+- `GET /{projectId}/invitations`
+- `POST /{projectId}/invitations`
+- `POST /invitations/{token}/accept`
+- `POST /invitations/{token}/reject`
+
+Project-only invitees can see the workspace name snapshot, project details, and
+tasks in that project only.
 
 ## Workspace Service
 

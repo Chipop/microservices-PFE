@@ -16,10 +16,9 @@ import {
 import { TaskPriority } from '../entities/task.entity';
 
 export class CreateTaskDto {
-  @IsOptional()
   @IsInt()
   @IsPositive()
-  workspace_id?: number;
+  project_id: number;
 
   @IsString()
   @IsNotEmpty()
@@ -178,6 +177,12 @@ export class ListTasksQueryDto {
   @IsPositive()
   @Type(() => Number)
   workspace_id?: number;
+
+  @IsOptional()
+  @IsInt()
+  @IsPositive()
+  @Type(() => Number)
+  project_id?: number;
 
   @IsOptional()
   @Type(() => Boolean)

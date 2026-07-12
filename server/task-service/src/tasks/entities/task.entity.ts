@@ -85,6 +85,10 @@ export class Task {
 
   @Column({ type: 'int', nullable: true })
   @Index()
+  project_id: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  @Index()
   author_user_id: number | null;
 
   @Column({ type: 'varchar', length: 200 })

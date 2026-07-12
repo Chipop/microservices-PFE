@@ -20,6 +20,7 @@ search:
   source:
     task-service-base-url: ${TASK_SERVICE_BASE_URL:http://task-service:8000}
     workspace-service-base-url: ${WORKSPACE_SERVICE_BASE_URL:http://workspace-service:8000}
+    project-service-base-url: ${PROJECT_SERVICE_BASE_URL:http://project-service:8000}
     user-service-base-url: ${USER_SERVICE_BASE_URL:http://user-service:8000}
 
 events:
@@ -41,6 +42,12 @@ events:
     - workspace.updated
     - workspace.deleted
     - workspace.access_updated
+    - project.created
+    - project.updated
+    - project.archived
+    - project.deleted
+    - project.invited
+    - project.member_role_changed
     - user.profile.created
     - user.profile.updated
 

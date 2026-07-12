@@ -14,6 +14,7 @@ public record SearchProperties(
     public record Source(
             String taskServiceBaseUrl,
             String workspaceServiceBaseUrl,
+            String projectServiceBaseUrl,
             String userServiceBaseUrl
     ) {
     }
