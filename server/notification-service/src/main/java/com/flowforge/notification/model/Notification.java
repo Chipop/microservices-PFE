@@ -22,6 +22,9 @@ public class Notification {
     @Column(name = "recipient_user_id", nullable = false)
     private Long recipientUserId;
 
+    @Column(name = "source_event_id", length = 96)
+    private String sourceEventId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 64)
     private NotificationType type;
@@ -68,6 +71,14 @@ public class Notification {
 
     public void setRecipientUserId(Long recipientUserId) {
         this.recipientUserId = recipientUserId;
+    }
+
+    public String getSourceEventId() {
+        return sourceEventId;
+    }
+
+    public void setSourceEventId(String sourceEventId) {
+        this.sourceEventId = sourceEventId;
     }
 
     public NotificationType getType() {

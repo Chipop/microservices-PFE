@@ -7,6 +7,7 @@ import com.flowforge.notification.model.Notification;
 import com.flowforge.notification.model.NotificationType;
 import com.flowforge.notification.model.RelatedResourceType;
 import com.flowforge.notification.repository.NotificationRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -65,7 +66,6 @@ public class NotificationService {
         notification.setDeletedAt(Instant.now());
     }
 
-    @Transactional
     public NotificationResponse create(
             Long recipientUserId,
             NotificationType type,
@@ -74,14 +74,59 @@ public class NotificationService {
             Long relatedResourceId,
             RelatedResourceType relatedResourceType
     ) {
+        return createNotification(null, recipientUserId, type, title, message, relatedResourceId, relatedResourceType).notification();
+    }
+
+    public NotificationCreation createFromEvent(
+            String sourceEventId,
+            Long recipientUserId,
+            NotificationType type,
+            String title,
+            String message,
+            Long relatedResourceId,
+            RelatedResourceType relatedResourceType
+    ) {
+        return createNotification(sourceEventId, recipientUserId, type, title, message, relatedResourceId, relatedResourceType);
+    }
+
+    private NotificationCreation createNotification(
+            String sourceEventId,
+            Long recipientUserId,
+            NotificationType type,
+            String title,
+            String message,
+            Long relatedResourceId,
+            RelatedResourceType relatedResourceType
+    ) {
+        if (sourceEventId != null && !sourceEventId.isBlank()) {
+            var existing = notifications.findBySourceEventIdAndRecipientUserIdAndType(
+                    sourceEventId,
+                    recipientUserId,
+                    type
+            );
+            if (existing.isPresent()) {
+                return new NotificationCreation(toResponse(existing.get()), false);
+            }
+        }
+
         var notification = new Notification();
+        notification.setSourceEventId(sourceEventId);
         notification.setRecipientUserId(recipientUserId);
         notification.setType(type);
         notification.setTitle(title);
         notification.setMessage(message);
         notification.setRelatedResourceId(relatedResourceId);
         notification.setRelatedResourceType(relatedResourceType);
-        return toResponse(notifications.save(notification));
+        try {
+            return new NotificationCreation(toResponse(notifications.saveAndFlush(notification)), true);
+        } catch (DataIntegrityViolationException exc) {
+            if (sourceEventId == null || sourceEventId.isBlank()) {
+                throw exc;
+            }
+            return notifications.findBySourceEventIdAndRecipientUserIdAndType(sourceEventId, recipientUserId, type)
+                    .map(existing -> new NotificationCreation(toResponse(existing), false))
+                    .orElseThrow(() -> exc);
+        }
     }
 
     private Notification findVisible(Long userId, Long notificationId) {

@@ -6,6 +6,7 @@ import com.flowforge.notification.model.RelatedResourceType;
 import java.time.Instant;
 
 public record NotificationEvent(
+        String sourceEventId,
         NotificationType eventType,
         Long recipientUserId,
         Long actorUserId,

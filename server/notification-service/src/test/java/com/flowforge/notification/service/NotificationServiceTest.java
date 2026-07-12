@@ -4,6 +4,7 @@ import com.flowforge.notification.model.Notification;
 import com.flowforge.notification.model.NotificationType;
 import com.flowforge.notification.model.RelatedResourceType;
 import com.flowforge.notification.repository.NotificationRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -20,6 +21,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -112,7 +114,7 @@ class NotificationServiceTest {
 
     @Test
     void createPersistsNotification() {
-        when(repository.save(any(Notification.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.saveAndFlush(any(Notification.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         service.create(
                 7L,
@@ -124,11 +126,59 @@ class NotificationServiceTest {
         );
 
         var captor = ArgumentCaptor.forClass(Notification.class);
-        verify(repository).save(captor.capture());
+        verify(repository).saveAndFlush(captor.capture());
         assertThat(captor.getValue().getRecipientUserId()).isEqualTo(7L);
         assertThat(captor.getValue().getType()).isEqualTo(NotificationType.TASK_ASSIGNED);
         assertThat(captor.getValue().getRelatedResourceId()).isEqualTo(99L);
         assertThat(captor.getValue().getRelatedResourceType()).isEqualTo(RelatedResourceType.TASK);
+    }
+
+    @Test
+    void createFromEventReturnsExistingNotificationForDuplicateEvent() {
+        var existing = notification(7L);
+        when(repository.findBySourceEventIdAndRecipientUserIdAndType(
+                "event-1",
+                7L,
+                NotificationType.TASK_ASSIGNED
+        )).thenReturn(Optional.of(existing));
+
+        var result = service.createFromEvent(
+                "event-1",
+                7L,
+                NotificationType.TASK_ASSIGNED,
+                "Assigned",
+                "A task was assigned to you.",
+                99L,
+                RelatedResourceType.TASK
+        );
+
+        assertThat(result.created()).isFalse();
+        assertThat(result.notification().recipientUserId()).isEqualTo(7L);
+        verify(repository, never()).saveAndFlush(any(Notification.class));
+    }
+
+    @Test
+    void createFromEventHandlesConcurrentDuplicateInsert() {
+        var existing = notification(7L);
+        when(repository.findBySourceEventIdAndRecipientUserIdAndType(
+                "event-1",
+                7L,
+                NotificationType.TASK_ASSIGNED
+        )).thenReturn(Optional.empty(), Optional.of(existing));
+        when(repository.saveAndFlush(any(Notification.class))).thenThrow(new DataIntegrityViolationException("duplicate"));
+
+        var result = service.createFromEvent(
+                "event-1",
+                7L,
+                NotificationType.TASK_ASSIGNED,
+                "Assigned",
+                "A task was assigned to you.",
+                99L,
+                RelatedResourceType.TASK
+        );
+
+        assertThat(result.created()).isFalse();
+        assertThat(result.notification().recipientUserId()).isEqualTo(7L);
     }
 
     private Notification notification(Long recipientUserId) {

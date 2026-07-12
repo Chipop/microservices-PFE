@@ -1,8 +1,8 @@
 package com.flowforge.notification.event;
 
-import com.flowforge.notification.dto.NotificationResponse;
 import com.flowforge.notification.model.NotificationType;
 import com.flowforge.notification.model.RelatedResourceType;
+import com.flowforge.notification.service.NotificationCreation;
 import com.flowforge.notification.service.NotificationService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -16,7 +16,7 @@ public class NotificationEventHandler {
         this.notifications = notifications;
     }
 
-    public NotificationResponse handle(NotificationEvent event) {
+    public NotificationCreation handle(NotificationEvent event) {
         if (event.recipientUserId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Notification recipient is required");
         }
@@ -25,7 +25,8 @@ public class NotificationEventHandler {
         }
 
         var content = defaultContent(event);
-        return notifications.create(
+        return notifications.createFromEvent(
+                event.sourceEventId(),
                 event.recipientUserId(),
                 event.eventType(),
                 firstNonBlank(event.title(), content.title()),
@@ -66,6 +67,11 @@ public class NotificationEventHandler {
                     "Attachment added",
                     "A new attachment was added.",
                     RelatedResourceType.ATTACHMENT
+            );
+            case USER_MENTIONED -> new NotificationContent(
+                    "You were mentioned",
+                    "Someone mentioned you.",
+                    RelatedResourceType.COMMENT
             );
         };
     }

@@ -1,6 +1,7 @@
 package com.flowforge.notification.repository;
 
 import com.flowforge.notification.model.Notification;
+import com.flowforge.notification.model.NotificationType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -13,6 +14,12 @@ import java.util.Optional;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
     Page<Notification> findByRecipientUserIdAndDeletedAtIsNull(Long recipientUserId, Pageable pageable);
+
+    Optional<Notification> findBySourceEventIdAndRecipientUserIdAndType(
+            String sourceEventId,
+            Long recipientUserId,
+            NotificationType type
+    );
 
     long countByRecipientUserIdAndReadFalseAndDeletedAtIsNull(Long recipientUserId);
 

@@ -26,6 +26,7 @@ class NotificationEventHandlerTest {
     @Test
     void usesProvidedTitleAndMessage() {
         var event = new NotificationEvent(
+                "event-1",
                 NotificationType.ATTACHMENT_ADDED,
                 7L,
                 3L,
@@ -38,7 +39,8 @@ class NotificationEventHandlerTest {
 
         handler.handle(event);
 
-        verify(notifications).create(
+        verify(notifications).createFromEvent(
+                "event-1",
                 7L,
                 NotificationType.ATTACHMENT_ADDED,
                 "Custom title",
@@ -51,6 +53,7 @@ class NotificationEventHandlerTest {
     @Test
     void usesDefaultContentForKnownEvents() {
         var event = new NotificationEvent(
+                "event-2",
                 NotificationType.WORKSPACE_INVITATION_CREATED,
                 7L,
                 3L,
@@ -63,7 +66,8 @@ class NotificationEventHandlerTest {
 
         handler.handle(event);
 
-        verify(notifications).create(
+        verify(notifications).createFromEvent(
+                "event-2",
                 7L,
                 NotificationType.WORKSPACE_INVITATION_CREATED,
                 "Workspace invitation received",
@@ -76,6 +80,7 @@ class NotificationEventHandlerTest {
     @Test
     void rejectsMissingRecipient() {
         var event = new NotificationEvent(
+                "event-3",
                 NotificationType.TASK_ASSIGNED,
                 null,
                 3L,

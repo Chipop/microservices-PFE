@@ -19,6 +19,24 @@ spring:
   flyway:
     enabled: true
 
+events:
+  exchange: ${RABBITMQ_EXCHANGE:flowforge.events}
+  queue: ${NOTIFICATION_QUEUE:notification-service.events}
+  dead-letter-exchange: ${NOTIFICATION_DLX:notification-service.events.dlx}
+  dead-letter-queue: ${NOTIFICATION_DLQ:notification-service.events.dlq}
+  dead-letter-routing-key: ${NOTIFICATION_DLQ_ROUTING_KEY:notification-service.events.failed}
+  max-attempts: ${NOTIFICATION_MAX_ATTEMPTS:3}
+  retry-backoff-ms: ${NOTIFICATION_RETRY_BACKOFF_MS:1000}
+  routing-keys:
+    - task.assigned
+    - task.completed
+    - task.deadline_approaching
+    - user.mentioned
+    - workspace.role_changed
+
+rabbitmq:
+  url: ${RABBITMQ_URL:amqp://guest:guest@localhost:5672/}
+
 notification:
   jwt-signing-key: ${JWT_SIGNING_KEY}
   cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
