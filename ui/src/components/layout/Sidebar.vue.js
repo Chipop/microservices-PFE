@@ -1,7 +1,24 @@
 import { Bell, ChevronLeft, ChevronRight, CircleUserRound, FolderKanban, Home, ListTodo, Search, Settings, Star, Users, Workflow } from 'lucide-vue-next';
+import { useRoute } from 'vue-router';
 import { useAppStore } from '@/stores/app';
 const app = useAppStore();
-const main = [['Home', '/home', Home], ['Your Work', '/tasks?assigned=me', Workflow], ['Projects', '/projects', FolderKanban], ['Tasks', '/tasks', ListTodo], ['Search', '/search', Search], ['Members', '/members', Users], ['Notifications', '/notifications', Bell], ['Workspace Settings', '/workspace/settings', Settings]];
+const route = useRoute();
+const main = [
+    { label: 'Home', to: '/home', icon: Home, section: '/home' },
+    { label: 'Your Work', to: '/your-work', icon: Workflow, section: '/your-work' },
+    { label: 'Projects', to: '/projects', icon: FolderKanban, section: '/projects' },
+    { label: 'Tasks', to: '/tasks', icon: ListTodo, section: '/tasks' },
+    { label: 'Search', to: '/search', icon: Search, section: '/search' },
+    { label: 'Members', to: '/members', icon: Users, section: '/members' },
+    { label: 'Notifications', to: '/notifications', icon: Bell, section: '/notifications' },
+    { label: 'Workspace Settings', to: '/workspace/settings', icon: Settings, section: '/workspace/settings' }
+];
+function isMainItemActive(item) {
+    if (item.section === '/tasks') {
+        return route.path.startsWith('/tasks');
+    }
+    return route.path === item.section || route.path.startsWith(`${item.section}/`);
+}
 const __VLS_ctx = {
     ...{},
     ...{},
@@ -19,35 +36,46 @@ __VLS_asFunctionalElement1(__VLS_intrinsics.nav, __VLS_intrinsics.nav)({
     ...{ class: "sidebar-nav" },
 });
 /** @type {__VLS_StyleScopedClasses['sidebar-nav']} */ ;
-for (const [[label, to, icon]] of __VLS_vFor((__VLS_ctx.main))) {
+for (const [item] of __VLS_vFor((__VLS_ctx.main))) {
     let __VLS_0;
     /** @ts-ignore @type { | typeof __VLS_components.RouterLink | typeof __VLS_components.RouterLink} */
     RouterLink;
     // @ts-ignore
     const __VLS_1 = __VLS_asFunctionalComponent1(__VLS_0, new __VLS_0({
-        key: (String(label)),
-        to: (String(to)),
-        ...{ class: "nav-item" },
+        key: (item.label),
+        to: (item.to),
+        custom: true,
     }));
     const __VLS_2 = __VLS_1({
-        key: (String(label)),
-        to: (String(to)),
-        ...{ class: "nav-item" },
+        key: (item.label),
+        to: (item.to),
+        custom: true,
     }, ...__VLS_functionalComponentArgsRest(__VLS_1));
-    /** @type {__VLS_StyleScopedClasses['nav-item']} */ ;
-    const { default: __VLS_5 } = __VLS_3.slots;
-    const __VLS_6 = (icon);
-    // @ts-ignore
-    const __VLS_7 = __VLS_asFunctionalComponent1(__VLS_6, new __VLS_6({
-        size: (18),
-    }));
-    const __VLS_8 = __VLS_7({
-        size: (18),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_7));
-    __VLS_asFunctionalElement1(__VLS_intrinsics.span, __VLS_intrinsics.span)({});
-    (label);
-    // @ts-ignore
-    [app, main,];
+    {
+        const { default: __VLS_5 } = __VLS_3.slots;
+        const [{ href, navigate }] = __VLS_vSlot(__VLS_5);
+        __VLS_asFunctionalElement1(__VLS_intrinsics.a, __VLS_intrinsics.a)({
+            ...{ onClick: (navigate) },
+            href: (href),
+            ...{ class: "nav-item" },
+            ...{ class: ({ active: __VLS_ctx.isMainItemActive(item) }) },
+        });
+        /** @type {__VLS_StyleScopedClasses['nav-item']} */ ;
+        /** @type {__VLS_StyleScopedClasses['active']} */ ;
+        const __VLS_6 = (item.icon);
+        // @ts-ignore
+        const __VLS_7 = __VLS_asFunctionalComponent1(__VLS_6, new __VLS_6({
+            size: (18),
+        }));
+        const __VLS_8 = __VLS_7({
+            size: (18),
+        }, ...__VLS_functionalComponentArgsRest(__VLS_7));
+        __VLS_asFunctionalElement1(__VLS_intrinsics.span, __VLS_intrinsics.span)({});
+        (item.label);
+        // @ts-ignore
+        [app, main, isMainItemActive,];
+        __VLS_3.slots['' /* empty slot name completion */];
+    }
     var __VLS_3;
     // @ts-ignore
     [];

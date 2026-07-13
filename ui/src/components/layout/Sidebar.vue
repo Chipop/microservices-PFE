@@ -1,13 +1,43 @@
 <script setup lang="ts">
 import { Bell, ChevronLeft, ChevronRight, CircleUserRound, FolderKanban, Home, ListTodo, Search, Settings, Star, Users, Workflow } from 'lucide-vue-next'
+import type { Component } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 const app=useAppStore()
-const main=[['Home','/home',Home],['Your Work','/tasks?assigned=me',Workflow],['Projects','/projects',FolderKanban],['Tasks','/tasks',ListTodo],['Search','/search',Search],['Members','/members',Users],['Notifications','/notifications',Bell],['Workspace Settings','/workspace/settings',Settings]]
+const route = useRoute()
+
+type NavItem = {
+  label: string
+  to: string
+  icon: Component
+  section: string
+}
+
+const main: NavItem[] = [
+  { label: 'Home', to: '/home', icon: Home, section: '/home' },
+  { label: 'Your Work', to: '/your-work', icon: Workflow, section: '/your-work' },
+  { label: 'Projects', to: '/projects', icon: FolderKanban, section: '/projects' },
+  { label: 'Tasks', to: '/tasks', icon: ListTodo, section: '/tasks' },
+  { label: 'Search', to: '/search', icon: Search, section: '/search' },
+  { label: 'Members', to: '/members', icon: Users, section: '/members' },
+  { label: 'Notifications', to: '/notifications', icon: Bell, section: '/notifications' },
+  { label: 'Workspace Settings', to: '/workspace/settings', icon: Settings, section: '/workspace/settings' }
+]
+
+function isMainItemActive(item: NavItem) {
+  if (item.section === '/tasks') {
+    return route.path.startsWith('/tasks')
+  }
+
+  return route.path === item.section || route.path.startsWith(`${item.section}/`)
+}
 </script>
 <template>
 <aside class="sidebar" :class="{collapsed:app.sidebarCollapsed}">
   <nav class="sidebar-nav">
-    <RouterLink v-for="[label,to,icon] in main" :key="String(label)" :to="String(to)" class="nav-item"><component :is="icon" :size="18"/><span>{{label}}</span></RouterLink>
+    <RouterLink v-for="item in main" :key="item.label" :to="item.to" custom v-slot="{ href, navigate }">
+      <a :href="href" class="nav-item" :class="{ active: isMainItemActive(item) }" @click="navigate"><component :is="item.icon" :size="18"/><span>{{item.label}}</span></a>
+    </RouterLink>
   </nav>
   <div class="sidebar-section">
     <div class="sidebar-heading"><span>Favorite projects</span><Star :size="13"/></div>

@@ -16,6 +16,7 @@ import ProjectBacklog from '@/pages/projects/ProjectBacklog.vue';
 import ProjectFiles from '@/pages/projects/ProjectFiles.vue';
 import ProjectSettings from '@/pages/projects/ProjectSettings.vue';
 import TasksPage from '@/pages/tasks/TasksPage.vue';
+import YourWorkPage from '@/pages/tasks/YourWorkPage.vue';
 import TaskDetailsPage from '@/pages/tasks/TaskDetailsPage.vue';
 import SearchPage from '@/pages/search/SearchPage.vue';
 import NotificationsPage from '@/pages/notifications/NotificationsPage.vue';
@@ -33,12 +34,14 @@ const routes = [
     { path: '/', component: AppShell, meta: { requiresAuth: true }, children: [
             { path: 'home', component: HomePage }, { path: 'projects', component: ProjectsPage }, { path: 'projects/new', component: NewProjectPage },
             { path: 'projects/:id', component: ProjectLayout, children: [{ path: '', redirect: (to) => `/projects/${to.params.id}/overview` }, { path: 'overview', component: ProjectOverview }, { path: 'board', component: ProjectBoard }, { path: 'list', component: ProjectList }, { path: 'timeline', component: ProjectTimeline }, { path: 'backlog', component: ProjectBacklog }, { path: 'files', component: ProjectFiles }, { path: 'settings', component: ProjectSettings }] },
-            { path: 'tasks', component: TasksPage }, { path: 'tasks/:id', component: TaskDetailsPage }, { path: 'search', component: SearchPage }, { path: 'notifications', component: NotificationsPage }, { path: 'profile', component: ProfilePage }, { path: 'security', component: SecurityPage }, { path: 'sessions', component: SessionsPage }, { path: 'workspaces', component: WorkspacesPage }, { path: 'members', component: MembersPage }, { path: 'workspace/settings', component: WorkspaceSettingsPage }
+            { path: 'your-work', component: YourWorkPage }, { path: 'tasks', component: TasksPage }, { path: 'tasks/:id', component: TaskDetailsPage }, { path: 'search', component: SearchPage }, { path: 'notifications', component: NotificationsPage }, { path: 'profile', component: ProfilePage }, { path: 'security', component: SecurityPage }, { path: 'sessions', component: SessionsPage }, { path: 'workspaces', component: WorkspacesPage }, { path: 'members', component: MembersPage }, { path: 'workspace/settings', component: WorkspaceSettingsPage }
         ] }, { path: '/:pathMatch(.*)*', component: NotFoundPage }
 ];
 const router = createRouter({ history: createWebHistory(), routes, scrollBehavior: () => ({ top: 0 }) });
 router.beforeEach(async (to) => {
     const auth = useAuthStore();
+    if (to.path === '/tasks' && to.query.assigned === 'me')
+        return '/your-work';
     if (auth.isSignedIn && !auth.profile) {
         try {
             await auth.initialize();

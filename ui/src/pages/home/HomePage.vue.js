@@ -88,10 +88,10 @@ let __VLS_16;
 RouterLink;
 // @ts-ignore
 const __VLS_17 = __VLS_asFunctionalComponent1(__VLS_16, new __VLS_16({
-    to: "/tasks?assigned=me",
+    to: "/your-work",
 }));
 const __VLS_18 = __VLS_17({
-    to: "/tasks?assigned=me",
+    to: "/your-work",
 }, ...__VLS_functionalComponentArgsRest(__VLS_17));
 const { default: __VLS_21 } = __VLS_19.slots;
 let __VLS_22;
@@ -213,10 +213,10 @@ let __VLS_60;
 RouterLink;
 // @ts-ignore
 const __VLS_61 = __VLS_asFunctionalComponent1(__VLS_60, new __VLS_60({
-    to: "/tasks?assigned=me",
+    to: "/your-work",
 }));
 const __VLS_62 = __VLS_61({
-    to: "/tasks?assigned=me",
+    to: "/your-work",
 }, ...__VLS_functionalComponentArgsRest(__VLS_61));
 const { default: __VLS_65 } = __VLS_63.slots;
 let __VLS_66;

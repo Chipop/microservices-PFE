@@ -1,12 +1,10 @@
 import { computed, ref } from 'vue';
-import { useRoute } from 'vue-router';
 import { useAppStore } from '@/stores/app';
 import TaskRow from '@/components/task/TaskRow.vue';
 const app = useAppStore();
-const route = useRoute();
 const query = ref('');
 const status = ref('All');
-const rows = computed(() => app.tasks.filter(t => (route.query.assigned !== 'me' || t.assignee?.id === app.currentUser.id) && (status.value === 'All' || t.status === status.value) && t.title.toLowerCase().includes(query.value.toLowerCase()))); // @ts-ignore
+const rows = computed(() => app.tasks.filter(t => (status.value === 'All' || t.status === status.value) && t.title.toLowerCase().includes(query.value.toLowerCase()))); // @ts-ignore
 const __VLS_ctx = {
     ...{},
     ...{},
@@ -24,7 +22,6 @@ __VLS_asFunctionalElement1(__VLS_intrinsics.header, __VLS_intrinsics.header)({
 /** @type {__VLS_StyleScopedClasses['page-header']} */ ;
 __VLS_asFunctionalElement1(__VLS_intrinsics.div, __VLS_intrinsics.div)({});
 __VLS_asFunctionalElement1(__VLS_intrinsics.h1, __VLS_intrinsics.h1)({});
-(__VLS_ctx.route.query.assigned === 'me' ? 'Your work' : 'All tasks');
 __VLS_asFunctionalElement1(__VLS_intrinsics.p, __VLS_intrinsics.p)({});
 __VLS_asFunctionalElement1(__VLS_intrinsics.button, __VLS_intrinsics.button)({
     ...{ class: "btn btn-primary" },
@@ -77,7 +74,7 @@ for (const [task] of __VLS_vFor((__VLS_ctx.rows))) {
         task: (task),
     }, ...__VLS_functionalComponentArgsRest(__VLS_1));
     // @ts-ignore
-    [route, query, status, rows,];
+    [query, status, rows,];
 }
 // @ts-ignore
 [];
