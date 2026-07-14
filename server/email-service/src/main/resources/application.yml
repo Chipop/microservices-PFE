@@ -55,3 +55,6 @@ email:
   from: ${SMTP_FROM:noreply@flowforge.local}
   max-attempts: ${EMAIL_MAX_ATTEMPTS:3}
   retry-backoff-ms: ${EMAIL_RETRY_BACKOFF_MS:1000}
+  app-url: ${APP_URL:http://localhost:3000}
+  logo-url: ${LOGO_URL:https://cdn.flowforge.com/assets/logo.png}
+  enable-html-emails: ${ENABLE_HTML_EMAILS:false}

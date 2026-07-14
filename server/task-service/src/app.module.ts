@@ -8,12 +8,11 @@ import {
   Subtask,
   Tag,
   Task,
+  TaskActivity,
   TaskAssignment,
-  TaskComment,
   TaskDependency,
   TaskRecurrence,
   TaskReminder,
-  TaskStatus,
   TaskTag,
 } from './tasks/entities/task.entity';
 import { TasksModule } from './tasks/tasks.module';
@@ -32,9 +31,8 @@ import { TasksModule } from './tasks/tasks.module';
         database: config.get<string>('POSTGRES_DB', 'tasks'),
         entities: [
           Task,
-          TaskStatus,
+          TaskActivity,
           TaskAssignment,
-          TaskComment,
           Tag,
           TaskTag,
           Subtask,

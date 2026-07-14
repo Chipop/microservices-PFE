@@ -22,18 +22,14 @@ import {
   AddDependencyDto,
   AddTagDto,
   AssignTaskDto,
-  CreateCommentDto,
   CreateKanbanColumnDto,
   CreateReminderDto,
   CreateSavedFilterDto,
-  CreateStatusDto,
   CreateSubtaskDto,
   CreateTaskDto,
   ListTasksQueryDto,
   UpdateKanbanColumnDto,
-  UpdateCommentDto,
   UpdateSavedFilterDto,
-  UpdateStatusDto,
   UpdateSubtaskDto,
   UpdateTaskDto,
   UpsertRecurrenceDto,
@@ -53,34 +49,6 @@ export class TasksController {
   @Post()
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateTaskDto) {
     return this.tasksService.create(user, dto);
-  }
-
-  @Get('statuses')
-  listStatuses(@CurrentUser() user: AuthUser) {
-    return this.tasksService.listStatuses(user.userId);
-  }
-
-  @Post('statuses')
-  createStatus(@CurrentUser() user: AuthUser, @Body() dto: CreateStatusDto) {
-    return this.tasksService.createStatus(user.userId, dto);
-  }
-
-  @Patch('statuses/:statusId')
-  updateStatus(
-    @CurrentUser() user: AuthUser,
-    @Param('statusId', ParseIntPipe) statusId: number,
-    @Body() dto: UpdateStatusDto,
-  ) {
-    return this.tasksService.updateStatus(user.userId, statusId, dto);
-  }
-
-  @Delete('statuses/:statusId')
-  @HttpCode(204)
-  removeStatus(
-    @CurrentUser() user: AuthUser,
-    @Param('statusId', ParseIntPipe) statusId: number,
-  ) {
-    return this.tasksService.removeStatus(user.userId, statusId);
   }
 
   @Get('kanban-columns')
@@ -140,6 +108,11 @@ export class TasksController {
     @Param('filterId', ParseIntPipe) filterId: number,
   ) {
     return this.tasksService.removeSavedFilter(user.userId, filterId);
+  }
+
+  @Get(':id/activity')
+  listActivity(@CurrentUser() user: AuthUser, @Param('id', ParseIntPipe) id: number) {
+    return this.tasksService.listActivity(user, id);
   }
 
   @Get(':id')
@@ -291,48 +264,6 @@ export class TasksController {
     return this.tasksService.removeReminder(user, id, reminderId);
   }
 
-  @Get(':id/comments')
-  listComments(@CurrentUser() user: AuthUser, @Param('id', ParseIntPipe) id: number) {
-    return this.tasksService.listComments(user, id);
-  }
-
-  @Post(':id/comments')
-  createComment(
-    @CurrentUser() user: AuthUser,
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: CreateCommentDto,
-  ) {
-    return this.tasksService.createComment(user, id, dto);
-  }
-
-  @Patch(':id/comments/:commentId')
-  updateComment(
-    @CurrentUser() user: AuthUser,
-    @Param('id', ParseIntPipe) id: number,
-    @Param('commentId', ParseIntPipe) commentId: number,
-    @Body() dto: UpdateCommentDto,
-  ) {
-    return this.tasksService.updateComment(user, id, commentId, dto);
-  }
-
-  @Delete(':id/comments/:commentId')
-  @HttpCode(204)
-  removeComment(
-    @CurrentUser() user: AuthUser,
-    @Param('id', ParseIntPipe) id: number,
-    @Param('commentId', ParseIntPipe) commentId: number,
-  ) {
-    return this.tasksService.removeComment(user, id, commentId);
-  }
-
-  @Get(':id/comments/:commentId/permissions')
-  commentPermissions(
-    @CurrentUser() user: AuthUser,
-    @Param('id', ParseIntPipe) id: number,
-    @Param('commentId', ParseIntPipe) commentId: number,
-  ) {
-    return this.tasksService.commentPermission(user, id, commentId);
-  }
 }
 
 @Controller('tasks/internal')
@@ -352,14 +283,13 @@ export class InternalTasksController {
     return this.tasksService.taskSearchSnapshots(Number(page), Number(size));
   }
 
-  @Get('comment-search-snapshots')
-  commentSearchSnapshots(
+  @Get(':id/snapshot')
+  taskSnapshot(
     @Headers('x-internal-key') internalKey: string | undefined,
-    @Query('page') page = '0',
-    @Query('size') size = '200',
+    @Param('id', ParseIntPipe) id: number,
   ) {
     this.requireInternalKey(internalKey);
-    return this.tasksService.commentSearchSnapshots(Number(page), Number(size));
+    return this.tasksService.internalTaskSnapshot(internalKey, id);
   }
 
   private requireInternalKey(internalKey: string | undefined) {

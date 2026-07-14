@@ -27,15 +27,18 @@ public class EmailDeliveryService {
     private final EmailDeliveryRepository deliveries;
     private final JavaMailSender mailSender;
     private final EmailProperties properties;
+    private final MimeMessageBuilder mimeMessageBuilder;
 
     public EmailDeliveryService(
             EmailDeliveryRepository deliveries,
             JavaMailSender mailSender,
-            EmailProperties properties
+            EmailProperties properties,
+            MimeMessageBuilder mimeMessageBuilder
     ) {
         this.deliveries = deliveries;
         this.mailSender = mailSender;
         this.properties = properties;
+        this.mimeMessageBuilder = mimeMessageBuilder;
     }
 
     @Transactional
@@ -79,12 +82,22 @@ public class EmailDeliveryService {
         while (delivery.getAttemptCount() < maxAttempts) {
             try {
                 delivery.setAttemptCount(delivery.getAttemptCount() + 1);
-                mailSender.send(toMessage(email));
+                
+                if (email.isHtml()) {
+                    mailSender.send(mimeMessage -> {
+                        mimeMessageBuilder.buildMultipartMessage(mimeMessage, email);
+                        mimeMessage.setFrom(properties.from());
+                    });
+                    logger.info("Sent HTML {} email to {}", email.templateKey(), email.recipient());
+                } else {
+                    mailSender.send(toSimpleMessage(email));
+                    logger.info("Sent plain text {} email to {}", email.templateKey(), email.recipient());
+                }
+                
                 delivery.setStatus(DeliveryStatus.SENT);
                 delivery.setSentAt(Instant.now());
                 delivery.setLastError(null);
                 deliveries.save(delivery);
-                logger.info("Sent {} email to {}", email.templateKey(), email.recipient());
                 return;
             } catch (MailException exc) {
                 delivery.setStatus(delivery.getAttemptCount() >= maxAttempts
@@ -103,7 +116,7 @@ public class EmailDeliveryService {
                 delivery.getAttemptCount());
     }
 
-    private SimpleMailMessage toMessage(RenderedEmail email) {
+    private SimpleMailMessage toSimpleMessage(RenderedEmail email) {
         var message = new SimpleMailMessage();
         message.setFrom(properties.from());
         message.setTo(email.recipient());
@@ -149,3 +162,4 @@ public class EmailDeliveryService {
         }
     }
 }
+

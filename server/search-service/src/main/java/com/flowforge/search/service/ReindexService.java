@@ -29,9 +29,9 @@ public class ReindexService {
     public ReindexResponse reindex(String internalApiKey) {
         var counts = new LinkedHashMap<String, Long>();
         counts.put("tasks", reindexSource(properties.source().taskServiceBaseUrl(), "/api/tasks/internal/search-snapshots", internalApiKey, indexNames.tasks()));
-        counts.put("comments", reindexSource(properties.source().taskServiceBaseUrl(), "/api/tasks/internal/comment-search-snapshots", internalApiKey, indexNames.comments()));
+        counts.put("comments", reindexSource(properties.source().commentServiceBaseUrl(), "/api/comments/internal/search-snapshots", internalApiKey, indexNames.comments()));
         counts.put("workspaces", reindexSource(properties.source().workspaceServiceBaseUrl(), "/api/workspaces/internal/search-snapshots", internalApiKey, indexNames.workspaces()));
-        counts.put("projects", reindexSource(properties.source().projectServiceBaseUrl(), "/api/projects/internal/search-snapshots", internalApiKey, indexNames.projects()));
+        counts.put("categories", reindexSource(properties.source().projectServiceBaseUrl(), "/api/categories/internal/search-snapshots", internalApiKey, indexNames.projects()));
         counts.put("users", reindexSource(properties.source().userServiceBaseUrl(), "/api/profiles/internal/search-snapshots/", internalApiKey, indexNames.users()));
         return new ReindexResponse(counts);
     }

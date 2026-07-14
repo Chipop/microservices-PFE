@@ -82,9 +82,9 @@ storage backend.
 - `POST / PUT / DELETE /api/profiles/picture/` — upload, replace, or remove profile picture
 
 ### `server/task-service/` — Task service (port 8003, NestJS)
-Owns workspace-scoped task CRUD plus task metadata such as statuses, priorities, deadlines,
+Owns workspace-scoped task CRUD plus task metadata such as direct status, priorities, deadlines,
 assignments, tags, subtasks, dependencies, recurrence configuration, reminders,
-Kanban columns, saved filters, and comments. Task access is checked through
+Kanban columns, saved filters, comments, and task activity. Task access is checked through
 workspace visibility/contribution permissions. Auth is **stateless**: the service has no
 users table — it verifies the shared HS256 JWT and trusts the `user_id` claim.
 Persists to its own `tasks-db` Postgres container via TypeORM.
@@ -93,6 +93,7 @@ Persists to its own `tasks-db` Postgres container via TypeORM.
 - `POST /api/tasks/{id}/complete`
 - `POST /api/tasks/{id}/archive`
 - `GET / POST /api/tasks/{id}/comments`
+- `GET /api/tasks/{id}/activity`
 
   Task responses include `done` as a derived compatibility field, while the
   service stores richer task state internally.

@@ -13,12 +13,18 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { TaskPriority } from '../entities/task.entity';
+import { TaskPriority, TaskStatus } from '../entities/task.entity';
 
 export class CreateTaskDto {
+  @IsOptional()
   @IsInt()
   @IsPositive()
-  project_id: number;
+  project_id?: number;
+
+  @IsOptional()
+  @IsInt()
+  @IsPositive()
+  category_id?: number;
 
   @IsString()
   @IsNotEmpty()
@@ -42,8 +48,8 @@ export class CreateTaskDto {
   due_at?: string | null;
 
   @IsOptional()
-  @IsPositive()
-  status_id?: number;
+  @IsEnum(TaskStatus)
+  status?: TaskStatus;
 
   @IsOptional()
   @IsPositive()
@@ -51,15 +57,6 @@ export class CreateTaskDto {
 }
 
 export class UpdateTaskDto extends PartialType(CreateTaskDto) {}
-
-export class CreateCommentDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(4000)
-  body: string;
-}
-
-export class UpdateCommentDto extends PartialType(CreateCommentDto) {}
 
 export class AssignTaskDto {
   @IsInt()
@@ -122,29 +119,6 @@ export class CreateReminderDto {
   remind_at: string;
 }
 
-export class CreateStatusDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(80)
-  name: string;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(80)
-  slug?: string;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  position?: number;
-
-  @IsOptional()
-  @IsBoolean()
-  is_terminal?: boolean;
-}
-
-export class UpdateStatusDto extends PartialType(CreateStatusDto) {}
-
 export class CreateKanbanColumnDto {
   @IsString()
   @IsNotEmpty()
@@ -185,15 +159,19 @@ export class ListTasksQueryDto {
   project_id?: number;
 
   @IsOptional()
+  @IsInt()
+  @IsPositive()
+  @Type(() => Number)
+  category_id?: number;
+
+  @IsOptional()
   @Type(() => Boolean)
   @IsBoolean()
   include_archived?: boolean;
 
   @IsOptional()
-  @IsInt()
-  @IsPositive()
-  @Type(() => Number)
-  status_id?: number;
+  @IsEnum(TaskStatus)
+  status?: TaskStatus;
 
   @IsOptional()
   @IsEnum(TaskPriority)

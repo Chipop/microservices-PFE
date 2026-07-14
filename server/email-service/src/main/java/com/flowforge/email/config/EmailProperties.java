@@ -6,6 +6,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record EmailProperties(
         String from,
         int maxAttempts,
-        long retryBackoffMs
+        long retryBackoffMs,
+        String appUrl,
+        String logoUrl,
+        boolean enableHtmlEmails
 ) {
 }

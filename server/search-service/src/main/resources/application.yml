@@ -19,8 +19,9 @@ search:
   index-prefix: ${SEARCH_INDEX_PREFIX:flowforge}
   source:
     task-service-base-url: ${TASK_SERVICE_BASE_URL:http://task-service:8000}
+    comment-service-base-url: ${COMMENT_SERVICE_BASE_URL:http://comment-service:8000}
     workspace-service-base-url: ${WORKSPACE_SERVICE_BASE_URL:http://workspace-service:8000}
-    project-service-base-url: ${PROJECT_SERVICE_BASE_URL:http://project-service:8000}
+    project-service-base-url: ${CATEGORY_SERVICE_BASE_URL:${PROJECT_SERVICE_BASE_URL:http://category-service:8000}}
     user-service-base-url: ${USER_SERVICE_BASE_URL:http://user-service:8000}
 
 events:
@@ -42,12 +43,12 @@ events:
     - workspace.updated
     - workspace.deleted
     - workspace.access_updated
-    - project.created
-    - project.updated
-    - project.archived
-    - project.deleted
-    - project.invited
-    - project.member_role_changed
+    - category.created
+    - category.updated
+    - category.archived
+    - category.deleted
+    - category.invited
+    - category.member_role_changed
     - user.profile.created
     - user.profile.updated
 

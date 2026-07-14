@@ -71,19 +71,37 @@ services:
       retries: 10
     networks: [flowforge-platform-network]
 
-  projects-db:
+  categories-db:
     image: postgres:16-alpine
-    container_name: projects-db
+    container_name: categories-db
     environment:
       - POSTGRES_USER=todo
       - POSTGRES_PASSWORD=todo
-      - POSTGRES_DB=projects
+      - POSTGRES_DB=categories
     volumes:
-      - projects_pgdata:/var/lib/postgresql/data
+      - categories_pgdata:/var/lib/postgresql/data
     ports:
       - "5440:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U todo -d projects"]
+      test: ["CMD-SHELL", "pg_isready -U todo -d categories"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [flowforge-platform-network]
+
+  comments-db:
+    image: postgres:16-alpine
+    container_name: comments-db
+    environment:
+      - POSTGRES_USER=todo
+      - POSTGRES_PASSWORD=todo
+      - POSTGRES_DB=comments
+    volumes:
+      - comments_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5441:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U todo -d comments"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -230,7 +248,7 @@ services:
       - TASK_SCHEMA_SYNC=true
       - INTERNAL_API_KEY=INTERNAL-CHANGE-ME
       - WORKSPACE_SERVICE_BASE_URL=http://workspace-service:8000
-      - PROJECT_SERVICE_BASE_URL=http://project-service:8000
+      - CATEGORY_SERVICE_BASE_URL=http://category-service:8000
       - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
     ports:
       - "8003:8000"
@@ -239,7 +257,7 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-      project-service:
+      category-service:
         condition: service_started
     networks: [flowforge-platform-network]
 
@@ -274,20 +292,20 @@ services:
         condition: service_healthy
     networks: [flowforge-platform-network]
 
-  project-service:
-    build: ./server/project-service
-    container_name: project-service
+  category-service:
+    build: ./server/category-service
+    container_name: category-service
     environment:
       - JWT_SIGNING_KEY=this-is-a-much-longer-shared-secret-key-32plus
       - INTERNAL_API_KEY=INTERNAL-CHANGE-ME
       - PORT=8000
-      - POSTGRES_HOST=projects-db
+      - POSTGRES_HOST=categories-db
       - POSTGRES_PORT=5432
-      - POSTGRES_DB=projects
+      - POSTGRES_DB=categories
       - POSTGRES_USER=todo
       - POSTGRES_PASSWORD=todo
-      - PROJECT_SCHEMA_SYNC=true
-      - PROJECT_INVITATION_TTL_HOURS=168
+      - CATEGORY_SCHEMA_SYNC=true
+      - CATEGORY_INVITATION_TTL_HOURS=168
       - WORKSPACE_SERVICE_BASE_URL=http://workspace-service:8000
       - USER_SERVICE_BASE_URL=http://user-service:8000
       - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
@@ -295,7 +313,7 @@ services:
     ports:
       - "8009:8000"
     depends_on:
-      projects-db:
+      categories-db:
         condition: service_healthy
       workspace-service:
         condition: service_started
@@ -303,6 +321,48 @@ services:
         condition: service_started
       rabbitmq:
         condition: service_healthy
+    networks: [flowforge-platform-network]
+
+  comment-service:
+    build: ./server/comment-service
+    container_name: comment-service
+    environment:
+      - JWT_SIGNING_KEY=this-is-a-much-longer-shared-secret-key-32plus
+      - INTERNAL_API_KEY=INTERNAL-CHANGE-ME
+      - PORT=8000
+      - POSTGRES_HOST=comments-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=comments
+      - POSTGRES_USER=todo
+      - POSTGRES_PASSWORD=todo
+      - COMMENT_SCHEMA_SYNC=true
+      - TASK_SERVICE_BASE_URL=http://task-service:8000
+      - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
+      - RABBITMQ_EXCHANGE=flowforge.events
+    ports:
+      - "8010:8000"
+    depends_on:
+      comments-db:
+        condition: service_healthy
+      task-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    networks: [flowforge-platform-network]
+
+  statistics-service:
+    build: ./server/statistics-service
+    container_name: statistics-service
+    environment:
+      - JWT_SIGNING_KEY=this-is-a-much-longer-shared-secret-key-32plus
+      - INTERNAL_API_KEY=INTERNAL-CHANGE-ME
+      - PORT=8000
+      - TASK_SERVICE_BASE_URL=http://task-service:8000
+    ports:
+      - "8011:8000"
+    depends_on:
+      task-service:
+        condition: service_started
     networks: [flowforge-platform-network]
 
   attachment-service:
@@ -404,8 +464,9 @@ services:
       - RABBITMQ_EXCHANGE=flowforge.events
       - SEARCH_QUEUE=search-service.events
       - TASK_SERVICE_BASE_URL=http://task-service:8000
+      - COMMENT_SERVICE_BASE_URL=http://comment-service:8000
       - WORKSPACE_SERVICE_BASE_URL=http://workspace-service:8000
-      - PROJECT_SERVICE_BASE_URL=http://project-service:8000
+      - CATEGORY_SERVICE_BASE_URL=http://category-service:8000
       - USER_SERVICE_BASE_URL=http://user-service:8000
     ports:
       - "8008:8000"
@@ -432,7 +493,9 @@ services:
       - notification-service
       - email-service
       - search-service
-      - project-service
+      - category-service
+      - comment-service
+      - statistics-service
     networks: [flowforge-platform-network]
 
   frontend:
@@ -502,7 +565,8 @@ volumes:
   users_pgdata:
   tasks_pgdata:
   workspaces_pgdata:
-  projects_pgdata:
+  categories_pgdata:
+  comments_pgdata:
   attachments_pgdata:
   notifications_pgdata:
   emails_pgdata:

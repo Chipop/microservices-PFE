@@ -77,5 +77,17 @@ class PublicProfileSerializer(serializers.ModelSerializer):
         return profile_picture_url(obj)
 
 
+class ProfileResolveSerializer(serializers.ModelSerializer):
+    profile_picture_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Profile
+        fields = ["auth_user_id", "username", "email", "profile_picture_url"]
+        read_only_fields = fields
+
+    def get_profile_picture_url(self, obj):
+        return profile_picture_url(obj)
+
+
 class ProfilePictureUploadSerializer(serializers.Serializer):
     file = serializers.FileField()

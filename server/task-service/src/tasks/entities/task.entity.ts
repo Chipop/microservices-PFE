@@ -18,36 +18,19 @@ export enum TaskPriority {
   URGENT = 'urgent',
 }
 
+export enum TaskStatus {
+  BACKLOG = 'backlog',
+  TODO = 'todo',
+  IN_PROGRESS = 'in_progress',
+  REVIEW = 'review',
+  DONE = 'done',
+  ARCHIVED = 'archived',
+}
+
 export enum ReminderStatus {
   PENDING = 'pending',
   SENT = 'sent',
   CANCELLED = 'cancelled',
-}
-
-@Entity({ name: 'task_statuses' })
-@Unique(['owner_user_id', 'slug'])
-export class TaskStatus {
-  @PrimaryGeneratedColumn()
-  id: number;
-
-  @Column({ type: 'int' })
-  @Index()
-  owner_user_id: number;
-
-  @Column({ type: 'varchar', length: 80 })
-  name: string;
-
-  @Column({ type: 'varchar', length: 80 })
-  slug: string;
-
-  @Column({ type: 'int', default: 0 })
-  position: number;
-
-  @Column({ type: 'boolean', default: false })
-  is_terminal: boolean;
-
-  @OneToMany(() => Task, (task) => task.status)
-  tasks: Task[];
 }
 
 @Entity({ name: 'kanban_columns' })
@@ -97,11 +80,12 @@ export class Task {
   @Column({ type: 'text', default: '' })
   description: string;
 
-  @Column({ type: 'int' })
-  status_id: number;
-
-  @ManyToOne(() => TaskStatus, (status) => status.tasks, { eager: true })
-  @JoinColumn({ name: 'status_id' })
+  @Column({
+    type: 'enum',
+    enum: TaskStatus,
+    default: TaskStatus.TODO,
+  })
+  @Index()
   status: TaskStatus;
 
   @Column({
@@ -155,8 +139,8 @@ export class Task {
   @OneToMany(() => TaskReminder, (reminder) => reminder.task)
   reminders: TaskReminder[];
 
-  @OneToMany(() => TaskComment, (comment) => comment.task)
-  comments: TaskComment[];
+  @OneToMany(() => TaskActivity, (activity) => activity.task)
+  activities: TaskActivity[];
 
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
@@ -165,8 +149,8 @@ export class Task {
   updated_at: Date;
 }
 
-@Entity({ name: 'task_comments' })
-export class TaskComment {
+@Entity({ name: 'task_activities' })
+export class TaskActivity {
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -174,28 +158,28 @@ export class TaskComment {
   @Index()
   task_id: number;
 
-  @ManyToOne(() => Task, (task) => task.comments)
+  @ManyToOne(() => Task, (task) => task.activities, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'task_id' })
   task: Task;
 
   @Column({ type: 'int' })
   @Index()
-  author_user_id: number;
+  actor_user_id: number;
 
-  @Column({ type: 'text' })
-  body: string;
+  @Column({ type: 'varchar', length: 80 })
+  type: string;
 
-  @Column({ type: 'timestamptz', nullable: true })
-  deleted_at: Date | null;
+  @Column({ type: 'varchar', length: 200, nullable: true })
+  from_value: string | null;
 
-  @Column({ type: 'int', nullable: true })
-  deleted_by_user_id: number | null;
+  @Column({ type: 'varchar', length: 200, nullable: true })
+  to_value: string | null;
+
+  @Column({ type: 'varchar', length: 500 })
+  message: string;
 
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
-
-  @UpdateDateColumn({ name: 'updated_at' })
-  updated_at: Date;
 }
 
 @Entity({ name: 'task_assignments' })
