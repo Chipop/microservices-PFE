@@ -49,15 +49,16 @@
 % =============================================================================
 %  >>> À REMPLIR PAR L'ÉQUIPE — ce sont les SEULES lignes à modifier <<<
 % =============================================================================
-\newcommand{\membreUn}{NOM Prénom}
-\newcommand{\membreDeux}{NOM Prénom}
-\newcommand{\membreTrois}{NOM Prénom}
-\newcommand{\membreQuatre}{NOM Prénom}   % supprimer si l'équipe compte 3 membres
-\newcommand{\filiere}{Filière — à compléter}
+\newcommand{\membreUn}{AMAZIGH Hicham}
+\newcommand{\membreDeux}{BOUDILI Mehdi}
+\newcommand{\membreTrois}{CHIBOUB Abdelaziz}
+\newcommand{\membreQuatre}{SENDID Ahmed}
+\newcommand{\filiere}{Master Informatique, Gouvernance et Transformation Digitale}
 \newcommand{\anneeUniv}{2025 -- 2026}
-\newcommand{\groupe}{Groupe N}
-\newcommand{\encadrant}{Pr. H. EL KHATEB}
-\newcommand{\etablissement}{Établissement — à compléter}
+\newcommand{\groupe}{Groupe 15}
+\newcommand{\encadrant}{Pr. Hamza EL KHATEB}
+\newcommand{\etablissement}{Université Mohammed V --- Faculté des Sciences de Rabat}
+\newcommand{\moduleTitre}{Microservices}
 % =============================================================================
 
 \newcommand{\projet}{FlowForge}
@@ -273,40 +274,43 @@
 % =============================================================================
 \begin{titlepage}
 \centering
-\vspace*{0.5cm}
+% L'interligne 1,5 du corps du rapport gonflerait la page de garde et
+% pousserait l'encadrant sur une 2e page : on repasse en interligne simple.
+\singlespacing
+\vspace*{0.2cm}
 
 {\large\scshape \etablissement\par}
-\vspace{0.3cm}
+\vspace{0.25cm}
 {\large\scshape \filiere\par}
-\vspace{0.2cm}
+\vspace{0.15cm}
 {\large Année universitaire \anneeUniv\par}
 
-\vspace{1.6cm}
+\vspace{1.1cm}
 
 {\color{ffgray}\rule{\linewidth}{0.4pt}}
-\vspace{0.5cm}
-
-{\small\bfseries\color{ffblue}\MakeUppercase{Module — Web Avancé \& Microservices}\par}
 \vspace{0.4cm}
 
+{\small\bfseries\color{ffblue}\MakeUppercase{Module — \moduleTitre}\par}
+\vspace{0.35cm}
+
 {\Huge\bfseries\color{ffdark} Mini-Projet Microservices\par}
-\vspace{0.7cm}
+\vspace{0.55cm}
 
 {\huge\bfseries\color{ffblue} \projet\par}
-\vspace{0.35cm}
+\vspace{0.25cm}
 {\Large\itshape \soustitre\par}
 
-\vspace{0.5cm}
+\vspace{0.4cm}
 {\color{ffgray}\rule{\linewidth}{0.4pt}}
 
-\vspace{1.2cm}
+\vspace{0.9cm}
 
 \begin{tcolorbox}[width=0.95\linewidth, colback=ffbg, colframe=ffblue,
-                  boxrule=0.6pt, arc=2pt, left=10pt, right=10pt, top=10pt, bottom=10pt]
+                  boxrule=0.6pt, arc=2pt, left=8pt, right=8pt, top=8pt, bottom=8pt]
 \centering
-{\bfseries\large\color{ffdark} Architecture réalisée\par}
-\vspace{3mm}
-{\normalsize
+{\bfseries\color{ffdark} Architecture réalisée\par}
+\vspace{2mm}
+{\small
 11 microservices conteneurisés \quad\textbullet\quad 3 technologies backend\\
 3 SGBD (PostgreSQL, MySQL, Elasticsearch) \quad\textbullet\quad Bus d'événements RabbitMQ\\
 Passerelle API NGINX \quad\textbullet\quad Frontend SPA Vue 3\par}
@@ -315,21 +319,22 @@ Passerelle API NGINX \quad\textbullet\quad Frontend SPA Vue 3\par}
 \vfill
 
 {\large\bfseries Réalisé par :\par}
-\vspace{0.4cm}
+\vspace{0.3cm}
 {\large
-\membreUn\\[2mm]
-\membreDeux\\[2mm]
-\membreTrois\\[2mm]
+\membreUn\\[1.5mm]
+\membreDeux\\[1.5mm]
+\membreTrois\\[1.5mm]
 \membreQuatre\par}
 
-\vspace{0.8cm}
-{\large \groupe\par}
+\vspace{0.55cm}
+{\large\bfseries \groupe\par}
 
-\vspace{0.8cm}
+\vspace{0.6cm}
 {\large\bfseries Encadré par :\par}
+\vspace{0.15cm}
 {\large \encadrant\par}
 
-\vspace{1cm}
+\vspace{0.4cm}
 \end{titlepage}
 
 % =============================================================================
