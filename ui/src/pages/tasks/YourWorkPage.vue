@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useTaskCreation } from '@/composables/useTaskCreation'
 import { useAppStore } from '@/stores/app'
 import TaskRow from '@/components/task/TaskRow.vue'
 
 const app = useAppStore()
+const { openCreateTask } = useTaskCreation()
 const query = ref('')
 const status = ref('All')
 
@@ -23,7 +25,7 @@ const rows = computed(() =>
         <h1>Your work</h1>
         <p>Tasks assigned to you across the workspace.</p>
       </div>
-      <button class="btn btn-primary">Create task</button>
+      <button class="btn btn-primary" @click="openCreateTask()">Create task</button>
     </header>
     <div class="toolbar">
       <input v-model="query" placeholder="Search your work"/>

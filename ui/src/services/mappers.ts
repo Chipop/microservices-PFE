@@ -3,11 +3,13 @@ import type {
   CommentDto,
   NotificationDto,
   ProfileDto,
-  ProjectDto,
+  CategoryDto,
+  TaskActivityDto,
   TaskDto,
+  TaskStatusDto,
   WorkspaceDto,
 } from './api'
-import type { Comment, Notification, Priority, Project, Task, TaskStatus, User, Workspace } from '@/types'
+import type { Comment, Notification, Priority, Category, Task, TaskActivity, TaskStatus, User, Workspace } from '@/types'
 
 export function initials(nameOrEmail: string) {
   const parts = nameOrEmail.trim().split(/[\s._-]+/).filter(Boolean)
@@ -35,14 +37,16 @@ export function workspaceToView(dto: WorkspaceDto): Workspace {
     memberCount: 1,
     role: dto.currentUserRole,
     workspaceType: dto.workspaceType,
+    visibility: dto.visibility,
+    publicContributionsEnabled: dto.publicContributionsEnabled,
   }
 }
 
-export function projectToView(dto: ProjectDto, lead: User): Project {
+export function categoryToView(dto: CategoryDto, lead: User): Category {
   return {
     id: String(dto.id),
     workspaceId: String(dto.workspace_id),
-    key: projectKey(dto.name, dto.id),
+    key: categoryKey(dto.name, dto.id),
     name: dto.name,
     description: dto.description ?? '',
     color: colorFromId(dto.id),
@@ -58,9 +62,9 @@ export function taskToView(dto: TaskDto, currentUser: User): Task {
   const assignee = dto.assignments[0]?.assignee_user_id
   return {
     id: String(dto.id),
-    key: taskKey(dto.project_id, dto.id),
+    key: taskKey(dto.category_id, dto.id),
     workspaceId: String(dto.workspace_id ?? ''),
-    projectId: String(dto.project_id ?? ''),
+    categoryId: String(dto.category_id ?? ''),
     title: dto.title,
     description: dto.description ?? '',
     status: statusToView(dto),
@@ -74,6 +78,7 @@ export function taskToView(dto: TaskDto, currentUser: User): Task {
     reminders: dto.reminders.map(reminder => reminder.remind_at),
     attachments: [],
     comments: [],
+    activities: [],
     updatedAt: formatDate(dto.updated_at),
     createdAt: formatDate(dto.created_at),
   }
@@ -109,7 +114,20 @@ export function notificationToView(dto: NotificationDto): Notification {
   }
 }
 
-export function priorityToApi(priority?: Priority) {
+export function activityToView(dto: TaskActivityDto, currentUser: User): TaskActivity {
+  const actor = dto.actor_user_id === Number(currentUser.id) ? currentUser : userStub(dto.actor_user_id)
+  return {
+    id: String(dto.id),
+    actor,
+    type: dto.type,
+    fromValue: dto.from_value ?? undefined,
+    toValue: dto.to_value ?? undefined,
+    message: dto.message,
+    createdAt: formatDate(dto.created_at),
+  }
+}
+
+export function priorityToApi(priority?: Priority): TaskDto['priority'] {
   if (priority === 'Highest') return 'urgent'
   if (priority === 'High') return 'high'
   if (priority === 'Low') return 'low'
@@ -123,18 +141,22 @@ export function priorityToView(priority: TaskDto['priority']): Priority {
   return 'Medium'
 }
 
-export function statusSlug(status?: TaskStatus) {
+export function statusToApi(status?: TaskStatus): TaskStatusDto | undefined {
+  if (status === 'Backlog') return 'backlog'
+  if (status === 'To do') return 'todo'
+  if (status === 'In progress') return 'in_progress'
+  if (status === 'Review') return 'review'
   if (status === 'Done') return 'done'
-  if (status === 'In progress' || status === 'Review') return 'in_progress'
-  if (status === 'Backlog' || status === 'To do') return 'todo'
   return undefined
 }
 
 function statusToView(dto: TaskDto): TaskStatus {
-  const slug = dto.status?.slug
-  if (dto.done || slug === 'done') return 'Done'
-  if (slug === 'in_progress') return 'In progress'
-  if (slug === 'archived') return 'Done'
+  if (dto.status === 'backlog') return 'Backlog'
+  if (dto.status === 'todo') return 'To do'
+  if (dto.status === 'in_progress') return 'In progress'
+  if (dto.status === 'review') return 'Review'
+  if (dto.status === 'done') return 'Done'
+  if (dto.status === 'archived') return 'Done'
   return 'To do'
 }
 
@@ -143,13 +165,13 @@ function userStub(id: number): User {
   return { id: String(id), name, username: `user-${id}`, email: '', initials: initials(name) }
 }
 
-function projectKey(name: string, id: number) {
+function categoryKey(name: string, id: number) {
   const letters = name.match(/[A-Za-z0-9]/g)?.join('').slice(0, 4).toUpperCase()
   return letters || `P${id}`
 }
 
-function taskKey(projectId: number | null, id: number) {
-  return `${projectId ? `P${projectId}` : 'TASK'}-${id}`
+function taskKey(categoryId: number | null, id: number) {
+  return `${categoryId ? `P${categoryId}` : 'TASK'}-${id}`
 }
 
 function colorFromId(id: number) {

@@ -4,7 +4,9 @@ export const API_BASES = {
   auth: `${GATEWAY}/api/auth`,
   profiles: `${GATEWAY}/api/profiles`,
   workspaces: `${GATEWAY}/api/workspaces`,
-  projects: `${GATEWAY}/api/projects`,
+  categories: `${GATEWAY}/api/categories`,
+  comments: `${GATEWAY}/api/comments`,
+  statistics: `${GATEWAY}/api/statistics`,
   tasks: `${GATEWAY}/api/tasks`,
   attachments: `${GATEWAY}/api/attachments`,
   notifications: `${GATEWAY}/api/notifications`,
@@ -59,6 +61,11 @@ export interface TwoFactorRequired {
   two_factor_required: true
 }
 
+export interface PasswordResetRequestResponse {
+  detail: string
+  token?: string
+}
+
 export interface AuthSessionDto {
   id: number
   ip_address: string
@@ -83,6 +90,13 @@ export interface ProfileDto {
   updated_at: string
 }
 
+export interface ProfileSearchResultDto {
+  auth_user_id: number
+  username: string
+  email: string
+  profile_picture_url: string | null
+}
+
 export interface WorkspaceDto {
   id: number
   name: string
@@ -101,7 +115,27 @@ export interface WorkspaceDto {
   canAdmin: boolean
 }
 
-export interface ProjectDto {
+export interface WorkspaceMemberDto {
+  id: number
+  userId: number
+  role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER'
+  joinedAt: string
+}
+
+export interface WorkspaceInvitationDto {
+  id: number
+  workspaceId: number
+  invitedEmail: string
+  invitedUserId: number | null
+  role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER'
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED'
+  expiresAt: string
+  respondedAt: string | null
+  createdAt: string
+  token: string
+}
+
+export interface CategoryDto {
   id: number
   workspace_id: number
   workspace_name: string
@@ -115,13 +149,7 @@ export interface ProjectDto {
   updated_at: string
 }
 
-export interface TaskStatusDto {
-  id: number
-  name: string
-  slug: string
-  position?: number
-  is_terminal?: boolean
-}
+export type TaskStatusDto = 'backlog' | 'todo' | 'in_progress' | 'review' | 'done' | 'archived'
 
 export interface KanbanColumnDto {
   id: number
@@ -131,7 +159,7 @@ export interface KanbanColumnDto {
 
 export interface TaskDto {
   id: number
-  project_id: number | null
+  category_id: number | null
   workspace_id: number | null
   author_user_id: number
   title: string
@@ -144,7 +172,7 @@ export interface TaskDto {
   deleted_at: string | null
   created_at: string
   updated_at: string
-  status: TaskStatusDto | null
+  status: TaskStatusDto
   kanban_column: KanbanColumnDto | null
   assignments: Array<{ id: number; assignee_user_id: number; assigned_by_user_id: number }>
   tags: Array<{ id: number; name: string; color: string }>
@@ -156,10 +184,34 @@ export interface TaskDto {
 export interface CommentDto {
   id: number
   task_id: number
+  category_id: number | null
+  workspace_id: number | null
   author_user_id: number
   body: string
   created_at: string
   updated_at: string
+}
+
+export interface TaskActivityDto {
+  id: number
+  task_id: number
+  actor_user_id: number
+  type: string
+  from_value: string | null
+  to_value: string | null
+  message: string
+  created_at: string
+}
+
+export interface TaskPermissionDto {
+  taskId: number
+  category_id: number | null
+  workspace_id: number | null
+  author_user_id: number
+  canView: boolean
+  canContribute: boolean
+  canAdmin: boolean
+  canDelete: boolean
 }
 
 export interface AttachmentDto {
@@ -199,6 +251,16 @@ export interface SearchResponseDto {
     score: number
     metadata: Record<string, unknown>
   }>
+}
+
+export interface StatisticsOverviewDto {
+  totalTasks: number
+  completedTasks: number
+  completionRate: number
+  byStatus: Record<string, number>
+  byCategory: Record<string, number>
+  byPriority: Record<string, number>
+  trends: Record<string, number>
 }
 
 interface RequestOptions {
@@ -327,6 +389,20 @@ export const authApi = {
       body: { old_password, new_password },
     })
   },
+  forgotPassword(email: string) {
+    return request<PasswordResetRequestResponse>(`${API_BASES.auth}/password/forgot/`, {
+      method: 'POST',
+      body: { email },
+      auth: false,
+    })
+  },
+  resetPassword(token: string, new_password: string) {
+    return request<void>(`${API_BASES.auth}/password/reset/confirm/`, {
+      method: 'POST',
+      body: { token, new_password },
+      auth: false,
+    })
+  },
 }
 
 export const profilesApi = {
@@ -336,6 +412,12 @@ export const profilesApi = {
   },
   update(id: number, patch: Partial<Pick<ProfileDto, 'username' | 'biography' | 'timezone' | 'language' | 'preferences'>>) {
     return request<ProfileDto>(`${API_BASES.profiles}/${id}/`, { method: 'PATCH', body: patch })
+  },
+  resolveByAuthIds(authUserIds: number[]) {
+    return request<ProfileDto[]>(buildUrl(`${API_BASES.profiles}/resolve/`, { auth_user_ids: authUserIds.join(',') }))
+  },
+  search(q: string) {
+    return request<ProfileSearchResultDto[]>(buildUrl(`${API_BASES.profiles}/search/`, { q }))
   },
   uploadPicture(file: File) {
     const body = new FormData()
@@ -354,6 +436,24 @@ export const workspacesApi = {
   create(input: { name: string; description?: string; visibility?: 'PRIVATE' | 'PUBLIC'; publicContributionsEnabled?: boolean }) {
     return request<WorkspaceDto>(`${API_BASES.workspaces}/`, { method: 'POST', body: input })
   },
+  members(workspaceId: number) {
+    return request<{ members: WorkspaceMemberDto[] }>(`${API_BASES.workspaces}/${workspaceId}/members/`)
+  },
+  inviteMember(workspaceId: number, input: { email: string; role: WorkspaceMemberDto['role'] }) {
+    return request<WorkspaceInvitationDto>(`${API_BASES.workspaces}/${workspaceId}/invitations`, {
+      method: 'POST',
+      body: input,
+    })
+  },
+  changeMemberRole(workspaceId: number, targetUserId: number, role: WorkspaceMemberDto['role']) {
+    return request<WorkspaceMemberDto>(`${API_BASES.workspaces}/${workspaceId}/members/${targetUserId}/role`, {
+      method: 'PATCH',
+      body: { role },
+    })
+  },
+  removeMember(workspaceId: number, targetUserId: number) {
+    return request<void>(`${API_BASES.workspaces}/${workspaceId}/members/${targetUserId}`, { method: 'DELETE' })
+  },
   update(id: number, input: Partial<{ name: string; description: string; visibility: 'PRIVATE' | 'PUBLIC'; publicContributionsEnabled: boolean }>) {
     return request<WorkspaceDto>(`${API_BASES.workspaces}/${id}`, { method: 'PATCH', body: input })
   },
@@ -362,35 +462,68 @@ export const workspacesApi = {
   },
 }
 
-export const projectsApi = {
+export const categoriesApi = {
   list(workspaceId?: number) {
-    return request<ProjectDto[]>(buildUrl(`${API_BASES.projects}/`, { workspace_id: workspaceId }))
+    return request<CategoryDto[]>(buildUrl(`${API_BASES.categories}/`, { workspace_id: workspaceId }))
   },
   get(id: number) {
-    return request<ProjectDto>(`${API_BASES.projects}/${id}`)
+    return request<CategoryDto>(`${API_BASES.categories}/${id}`)
   },
   create(input: { workspace_id: number; name: string; description?: string }) {
-    return request<ProjectDto>(`${API_BASES.projects}/`, { method: 'POST', body: input })
+    return request<CategoryDto>(`${API_BASES.categories}/`, { method: 'POST', body: input })
   },
   update(id: number, input: Partial<{ name: string; description: string }>) {
-    return request<ProjectDto>(`${API_BASES.projects}/${id}`, { method: 'PATCH', body: input })
+    return request<CategoryDto>(`${API_BASES.categories}/${id}`, { method: 'PATCH', body: input })
   },
   archive(id: number) {
-    return request<ProjectDto>(`${API_BASES.projects}/${id}/archive`, { method: 'POST' })
+    return request<CategoryDto>(`${API_BASES.categories}/${id}/archive`, { method: 'POST' })
   },
 }
 
 export const tasksApi = {
-  list(params?: { workspace_id?: number; project_id?: number; status_id?: number; priority?: string }) {
+  list(params?: { workspace_id?: number; category_id?: number; status?: TaskStatusDto; priority?: string }) {
     return request<TaskDto[]>(buildUrl(`${API_BASES.tasks}/`, params))
   },
   get(id: number) {
     return request<TaskDto>(`${API_BASES.tasks}/${id}`)
   },
-  create(input: Partial<TaskDto> & { project_id: number; title: string }) {
+  permissions(id: number) {
+    return request<TaskPermissionDto>(`${API_BASES.tasks}/${id}/permissions`)
+  },
+  create(input: Partial<TaskDto> & { category_id: number; title: string }) {
     return request<TaskDto>(`${API_BASES.tasks}/`, { method: 'POST', body: input })
   },
-  update(id: number, input: Partial<{ title: string; description: string; done: boolean; priority: string; due_at: string | null; status_id: number; kanban_column_id: number | null }>) {
+  addAssignment(taskId: number, assigneeUserId: number) {
+    return request<{ id: number; assignee_user_id: number; assigned_by_user_id: number }>(
+      `${API_BASES.tasks}/${taskId}/assignments`,
+      { method: 'POST', body: { assignee_user_id: assigneeUserId } },
+    )
+  },
+  addTag(taskId: number, name: string, color?: string) {
+    return request<TaskDto>(`${API_BASES.tasks}/${taskId}/tags`, {
+      method: 'POST',
+      body: { name, ...(color ? { color } : {}) },
+    })
+  },
+  createSubtask(taskId: number, title: string, position: number) {
+    return request<{ id: number; title: string; done: boolean; position: number }>(
+      `${API_BASES.tasks}/${taskId}/subtasks`,
+      { method: 'POST', body: { title, position } },
+    )
+  },
+  upsertRecurrence(taskId: number, enabled: boolean, rule: Record<string, unknown>) {
+    return request<{ id: number; enabled: boolean; rule: Record<string, unknown> }>(
+      `${API_BASES.tasks}/${taskId}/recurrence`,
+      { method: 'PUT', body: { enabled, rule } },
+    )
+  },
+  createReminder(taskId: number, remindAt: string) {
+    return request<{ id: number; remind_at: string; status: string; sent_at: string | null }>(
+      `${API_BASES.tasks}/${taskId}/reminders`,
+      { method: 'POST', body: { remind_at: remindAt } },
+    )
+  },
+  update(id: number, input: Partial<{ title: string; description: string; done: boolean; priority: string; due_at: string | null; status: TaskStatusDto; kanban_column_id: number | null }>) {
     return request<TaskDto>(`${API_BASES.tasks}/${id}`, { method: 'PATCH', body: input })
   },
   complete(id: number) {
@@ -402,17 +535,32 @@ export const tasksApi = {
   remove(id: number) {
     return request<void>(`${API_BASES.tasks}/${id}`, { method: 'DELETE' })
   },
-  statuses() {
-    return request<TaskStatusDto[]>(`${API_BASES.tasks}/statuses`)
-  },
   columns() {
     return request<KanbanColumnDto[]>(`${API_BASES.tasks}/kanban-columns`)
   },
-  comments(taskId: number) {
-    return request<CommentDto[]>(`${API_BASES.tasks}/${taskId}/comments`)
+  activity(taskId: number) {
+    return request<TaskActivityDto[]>(`${API_BASES.tasks}/${taskId}/activity`)
   },
-  createComment(taskId: number, body: string) {
-    return request<CommentDto>(`${API_BASES.tasks}/${taskId}/comments`, { method: 'POST', body: { body } })
+}
+
+export const commentsApi = {
+  list(taskId: number) {
+    return request<CommentDto[]>(buildUrl(`${API_BASES.comments}/`, { task_id: taskId }))
+  },
+  create(taskId: number, body: string) {
+    return request<CommentDto>(`${API_BASES.comments}/`, { method: 'POST', body: { task_id: taskId, body } })
+  },
+  update(id: number, body: string) {
+    return request<CommentDto>(`${API_BASES.comments}/${id}`, { method: 'PATCH', body: { body } })
+  },
+  remove(id: number) {
+    return request<void>(`${API_BASES.comments}/${id}`, { method: 'DELETE' })
+  },
+}
+
+export const statisticsApi = {
+  overview(params?: { workspace_id?: number; category_id?: number; priority?: string; status?: string }) {
+    return request<StatisticsOverviewDto>(buildUrl(`${API_BASES.statistics}/overview`, params))
   },
 }
 

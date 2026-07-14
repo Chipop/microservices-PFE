@@ -18,23 +18,20 @@ export const useNotificationStore = defineStore('notifications', () => {
     const item = items.value.find(n => n.id === id)
     if (!item || item.isRead) return
     item.isRead = true
-    if (import.meta.env.VITE_USE_MOCKS !== 'true') {
-      const updated = await notificationsApi.markRead(Number(id))
-      Object.assign(item, notificationToView(updated))
-    }
+    const updated = await notificationsApi.markRead(Number(id))
+    Object.assign(item, notificationToView(updated))
   }
   async function markAllRead() {
     items.value.forEach(n => n.isRead = true)
-    if (import.meta.env.VITE_USE_MOCKS !== 'true') await notificationsApi.markAllRead()
+    await notificationsApi.markAllRead()
   }
   async function remove(id: string) {
     items.value = items.value.filter(n => n.id !== id)
-    if (import.meta.env.VITE_USE_MOCKS !== 'true') await notificationsApi.remove(Number(id))
+    await notificationsApi.remove(Number(id))
   }
   function receive(notification: Notification) { items.value.unshift(notification) }
 
   function connectSocket() {
-    if (import.meta.env.VITE_USE_MOCKS === 'true') return connectMockSocket()
     const auth = useAuthStore()
     const url = notificationWebSocketUrl()
     if (!auth.isSignedIn || !url || socket.value?.readyState === WebSocket.OPEN || socket.value?.readyState === WebSocket.CONNECTING) return
@@ -51,10 +48,6 @@ export const useNotificationStore = defineStore('notifications', () => {
       socketState.value = 'disconnected'
       if (useAuthStore().isSignedIn) scheduleReconnect()
     }
-  }
-  function connectMockSocket() {
-    socketState.value = 'connecting'
-    window.setTimeout(() => { socketState.value = 'connected' }, 500)
   }
   function disconnectSocket() {
     clearReconnect()
@@ -91,5 +84,5 @@ export const useNotificationStore = defineStore('notifications', () => {
     }
   }
 
-  return { items, unreadCount, socketState, initialize, markRead, markAllRead, remove, receive, connectSocket, connectMockSocket, disconnectSocket, reset }
+  return { items, unreadCount, socketState, initialize, markRead, markAllRead, remove, receive, connectSocket, disconnectSocket, reset }
 })

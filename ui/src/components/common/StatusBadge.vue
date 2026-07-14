@@ -1,2 +1,18 @@
-<script setup lang="ts">defineProps<{ value:string }>()</script>
-<template><span class="status-badge" :data-status="value.toLowerCase().replace(/\s+/g,'-')">{{ value }}</span></template>
+<script setup lang="ts">
+import { computed } from 'vue'
+
+const props = defineProps<{
+  value: string
+}>()
+
+const statusKey = computed(() => props.value.toLowerCase().replace(/\s+/g, '-'))
+</script>
+
+<template>
+  <span
+    class="status-badge"
+    :data-status="statusKey"
+  >
+    {{ value }}
+  </span>
+</template>

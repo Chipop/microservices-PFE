@@ -1,5 +1,6 @@
 export type Priority = 'Highest' | 'High' | 'Medium' | 'Low'
 export type TaskStatus = 'Backlog' | 'To do' | 'In progress' | 'Review' | 'Done'
+export type WorkspaceRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER'
 
 export interface User {
   id: string
@@ -7,9 +8,11 @@ export interface User {
   username: string
   email: string
   initials: string
-  role?: string
+  role?: WorkspaceRole
   avatar?: string
 }
+
+export type WorkspaceMember = User & { role: WorkspaceRole }
 
 export interface Workspace {
   id: string
@@ -17,11 +20,13 @@ export interface Workspace {
   key: string
   description: string
   memberCount: number
-  role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER'
+  role: WorkspaceRole
   workspaceType: 'PERSONAL' | 'TEAM'
+  visibility?: 'PRIVATE' | 'PUBLIC'
+  publicContributionsEnabled?: boolean
 }
 
-export interface Project {
+export interface Category {
   id: string
   workspaceId: string
   key: string
@@ -42,11 +47,28 @@ export interface Comment {
   createdAt: string
 }
 
+export interface TaskActivity {
+  id: string
+  actor: User
+  type: string
+  fromValue?: string
+  toValue?: string
+  message: string
+  createdAt: string
+}
+
+export interface TaskPermissions {
+  canView: boolean
+  canContribute: boolean
+  canAdmin: boolean
+  canDelete: boolean
+}
+
 export interface Task {
   id: string
   key: string
   workspaceId: string
-  projectId: string
+  categoryId: string
   title: string
   description: string
   status: TaskStatus
@@ -61,8 +83,27 @@ export interface Task {
   reminders: string[]
   attachments: { id: string; name: string; size: string }[]
   comments: Comment[]
+  activities: TaskActivity[]
+  permissions?: TaskPermissions
   updatedAt: string
   createdAt: string
+}
+
+export interface CreateTaskInput {
+  title: string
+  categoryId: string
+  workspaceId?: string
+  description?: string
+  status?: TaskStatus
+  priority?: Priority
+  dueDate?: string
+  assignee?: User
+  assigneeUsername?: string
+  assigneeUserId?: string
+  tags?: string[]
+  subtaskTitles?: string[]
+  reminderDates?: string[]
+  recurrence?: string
 }
 
 export interface Notification {

@@ -70,6 +70,23 @@ export const useAuthStore = defineStore('auth', () => {
     profile.value = await profilesApi.update(profile.value.id, patch)
   }
 
+  async function uploadProfilePicture(file: File) {
+    profile.value = await profilesApi.uploadPicture(file)
+  }
+
+  async function changePassword(oldPassword: string, newPassword: string) {
+    loading.value = true
+    error.value = ''
+    try {
+      await authApi.changePassword(oldPassword, newPassword)
+    } catch (exc) {
+      error.value = exc instanceof Error ? exc.message : 'Password update failed'
+      throw exc
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function loadSessions() {
     if (!isSignedIn.value) return
     sessionsLoading.value = true
@@ -77,6 +94,19 @@ export const useAuthStore = defineStore('auth', () => {
       sessions.value = await authApi.sessions()
     } finally {
       sessionsLoading.value = false
+    }
+  }
+
+  async function revokeSession(id: number) {
+    await authApi.revokeSession(id)
+    sessions.value = sessions.value.filter(session => session.id !== id)
+  }
+
+  async function logoutAllSessions() {
+    try {
+      await authApi.logoutAll()
+    } finally {
+      logout()
     }
   }
 
@@ -111,7 +141,11 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     loadProfile,
     updateProfile,
+    uploadProfilePicture,
+    changePassword,
     loadSessions,
+    revokeSession,
+    logoutAllSessions,
     logoutRemote,
     logout,
   }
