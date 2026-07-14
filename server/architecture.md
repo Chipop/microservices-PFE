@@ -22,9 +22,11 @@ not hardcode them.
 |---|---|---:|---|
 | `/api/auth/**` | `auth-service` | `8002` | Registration, login, sessions, password/security workflows |
 | `/api/profiles/**` | `user-service` | `8001` | User profile metadata and public profiles |
-| `/api/tasks/**` | `task-service` | `8003` | Tasks, comments, assignments, tags, reminders, statuses |
+| `/api/tasks/**` | `task-service` | `8003` | Tasks, assignments, tags, reminders, statuses |
 | `/api/workspaces/**` | `workspace-service` | `8004` | Workspaces, membership, invitations, permissions |
-| `/api/projects/**` | `project-service` | `8009` | Workspace projects, project-only invitations, project permissions |
+| `/api/categories/**` | `category-service` | `8009` | Workspace categories, category-only invitations, category permissions |
+| `/api/comments/**` | `comment-service` | `8010` | Task comments |
+| `/api/statistics/**` | `statistics-service` | `8011` | Productivity metrics and distributions |
 | `/api/attachments/**` | `attachment-service` | `8005` | Task/comment file metadata and signed download links |
 | `/api/notifications/**` | `notification-service` | `8006` | In-app notification history and read/delete actions |
 | `/ws/notifications` | `notification-service` | `8006` | Realtime notification socket |
@@ -134,9 +136,9 @@ Important profile fields:
 
 ## Task Service
 
-Owns task data and task-adjacent collaboration features: statuses, assignments,
+Owns task data and task-adjacent collaboration features: direct task status, assignments,
 comments, tags, subtasks, dependencies, recurrence, reminders, kanban columns,
-and saved filters.
+saved filters, and task activity.
 
 Base path: `/api/tasks`
 
@@ -151,6 +153,7 @@ Base path: `/api/tasks`
 | `DELETE` | `/{id}` | Yes | none | Soft-deletes task. |
 | `POST` | `/{id}/complete` | Yes | none | Marks task complete. |
 | `POST` | `/{id}/archive` | Yes | none | Archives task. |
+| `GET` | `/{id}/activity` | Yes | none | Lists persisted task activity entries. |
 | `GET` | `/{id}/permissions` | Yes | none | Returns task permission booleans for current user. |
 
 Task response fields include:
@@ -166,10 +169,6 @@ Task response fields include:
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET /statuses` | List user-owned statuses. |
-| `POST /statuses` | Create status. |
-| `PATCH /statuses/{statusId}` | Update status. |
-| `DELETE /statuses/{statusId}` | Delete status and detach from tasks. |
 | `GET /kanban-columns` | List kanban columns. |
 | `POST /kanban-columns` | Create column. |
 | `PATCH /kanban-columns/{columnId}` | Update column. |
@@ -213,28 +212,28 @@ Frontend notes:
 - Task events power search and some notifications, but frontend should still
   update local task state from REST responses.
 
-## Project Service
+## Category Service
 
-Owns projects, project role overlays, and project-only invitation workflows.
-Projects belong to workspaces and tasks belong to projects.
+Owns categories, category role overlays, and category-only invitation workflows.
+Categories belong to workspaces and tasks belong to categories.
 
-Base path: `/api/projects`
+Base path: `/api/categories`
 
 | Method | Path | Auth | Body / query | Response / behavior |
 |---|---|---|---|---|
-| `GET` | `/` | Yes | optional `workspace_id` | Lists projects visible to the caller. |
-| `POST` | `/` | Yes | `{ "workspace_id", "name", "description?" }` | Creates a project; caller becomes project owner. |
-| `GET` | `/{projectId}` | Yes | none | Loads one visible project. |
-| `PATCH` | `/{projectId}` | Yes | `{ "name?", "description?" }` | Updates project admin fields; workspace cannot change. |
-| `DELETE` | `/{projectId}` | Yes | none | Soft-deletes project when caller is author or admin. |
-| `POST` | `/{projectId}/archive` | Yes | none | Archives project when caller is author or admin. |
-| `GET` | `/{projectId}/permissions/me` | Yes | none | Permission booleans for current user. |
+| `GET` | `/` | Yes | optional `workspace_id` | Lists categories visible to the caller. |
+| `POST` | `/` | Yes | `{ "workspace_id", "name", "description?" }` | Creates a category; caller becomes category owner. |
+| `GET` | `/{categoryId}` | Yes | none | Loads one visible category. |
+| `PATCH` | `/{categoryId}` | Yes | `{ "name?", "description?" }` | Updates category admin fields; workspace cannot change. |
+| `DELETE` | `/{categoryId}` | Yes | none | Soft-deletes category when caller is author or admin. |
+| `POST` | `/{categoryId}/archive` | Yes | none | Archives category when caller is author or admin. |
+| `GET` | `/{categoryId}/permissions/me` | Yes | none | Permission booleans for current user. |
 
-Project roles:
+Category roles:
 
-- `PROJECT_OWNER`, `PROJECT_ADMIN`, `CONTRIBUTOR`, `VIEWER`.
-- Workspace roles are inherited, but explicit project membership can grant
-  access to one project without workspace membership.
+- `CATEGORY_OWNER`, `CATEGORY_ADMIN`, `CONTRIBUTOR`, `VIEWER`.
+- Workspace roles are inherited, but explicit category membership can grant
+  access to one category without workspace membership.
 
 Project invitation endpoints:
 

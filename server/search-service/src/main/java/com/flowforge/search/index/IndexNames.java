@@ -41,7 +41,7 @@ public class IndexNames {
         return switch (type) {
             case "task" -> tasks();
             case "workspace" -> workspaces();
-            case "project" -> projects();
+            case "project", "category" -> projects();
             case "user" -> users();
             case "comment" -> comments();
             default -> throw new IllegalArgumentException("Unsupported search type: " + type);

@@ -1,16 +1,35 @@
 from django.contrib.auth.password_validation import validate_password
+from django.db.models.functions import Lower
 from rest_framework import serializers
 
 from .models import AuthSession, User
 
 
 class RegisterSerializer(serializers.ModelSerializer):
+    username = serializers.CharField()
+    email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
 
     class Meta:
         model = User
         fields = ["id", "username", "email", "password"]
         read_only_fields = ["id"]
+
+    def validate_username(self, value):
+        username = value.strip()
+        if not username:
+            raise serializers.ValidationError("Username is required.")
+        if User.objects.annotate(username_ci=Lower("username")).filter(username_ci=username.lower()).exists():
+            raise serializers.ValidationError("A user with that username already exists.")
+        return username
+
+    def validate_email(self, value):
+        email = value.strip().lower()
+        if not email:
+            raise serializers.ValidationError("Email is required.")
+        if User.objects.annotate(email_ci=Lower("email")).filter(email_ci=email).exists():
+            raise serializers.ValidationError("A user with that email already exists.")
+        return email
 
     def create(self, validated_data):
         return User.objects.create_user(**validated_data)

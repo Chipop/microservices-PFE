@@ -4,10 +4,12 @@ import secrets
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.db.models.functions import Lower
 from django.utils import timezone
 
 
 class User(AbstractUser):
+    email = models.EmailField(unique=True)
     email_verified_at = models.DateTimeField(null=True, blank=True)
     failed_login_count = models.PositiveIntegerField(default=0)
     locked_until = models.DateTimeField(null=True, blank=True)
@@ -17,6 +19,12 @@ class User(AbstractUser):
     @property
     def is_locked(self):
         return bool(self.locked_until and self.locked_until > timezone.now())
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(Lower("username"), name="auth_user_username_ci_unique"),
+            models.UniqueConstraint(Lower("email"), name="auth_user_email_ci_unique"),
+        ]
 
 
 class AuthSession(models.Model):

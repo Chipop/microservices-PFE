@@ -6,12 +6,11 @@ import {
   Subtask,
   Tag,
   Task,
+  TaskActivity,
   TaskAssignment,
-  TaskComment,
   TaskDependency,
   TaskRecurrence,
   TaskReminder,
-  TaskStatus,
   TaskTag,
 } from './entities/task.entity';
 import { InternalTasksController, TasksController } from './tasks.controller';
@@ -22,9 +21,8 @@ import { DomainEventPublisher } from '../events/domain-event.publisher';
   imports: [
     TypeOrmModule.forFeature([
       Task,
-      TaskStatus,
+      TaskActivity,
       TaskAssignment,
-      TaskComment,
       Tag,
       TaskTag,
       Subtask,

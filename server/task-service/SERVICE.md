@@ -2,13 +2,13 @@
 
 ## Purpose
 
-`task-service` owns project-scoped task management and task comments. It
+`task-service` owns category-scoped task management. It
 replaces the former simple todo runtime and exposes the public gateway contract
 under `/api/tasks/`.
 
 The service is stateless for authentication. It validates the JWT access token
 issued by `auth-service`, extracts the `user_id` claim, and checks project
-visibility/contribution permissions through `project-service`.
+visibility/contribution permissions through `category-service`.
 
 ## Runtime
 
@@ -24,11 +24,10 @@ visibility/contribution permissions through `project-service`.
 ## Responsibilities
 
 - Create, retrieve, edit, soft-delete, archive, and complete tasks.
-- Manage task comments.
 - Manage statuses, priorities, deadlines, tags, subtasks, dependencies,
   recurrence configuration, reminders, Kanban columns, and saved filters.
 - Assign tasks by auth user id.
-- Validate task permissions through project visibility and contribution rules.
+- Validate task permissions through category visibility and contribution rules.
 - Hide cross-user tasks by returning `404`.
 - Publish RabbitMQ domain events for task create, update, assignment, and
   completion.
@@ -42,8 +41,7 @@ The service owns its full task database. Other services must not read or write
 these tables directly.
 
 - `tasks`
-- `task_comments`
-- `task_statuses`
+- `task_activities`
 - `task_assignments`
 - `tags`
 - `task_tags`
@@ -54,9 +52,11 @@ these tables directly.
 - `kanban_columns`
 - `saved_filters`
 
-Tasks store mandatory `project_id`, denormalized `workspace_id`, and
-`author_user_id`. Assignments store auth user IDs only. The service does not
-store passwords, tokens, or user profile data.
+Tasks store mandatory category identity in the legacy `project_id` database column,
+denormalized `workspace_id`, and
+`author_user_id`, plus a direct fixed `status` value. Assignments and
+activities store auth user IDs only. The service does not store passwords,
+tokens, or user profile data.
 
 ## Public API
 
@@ -70,21 +70,23 @@ Core task routes:
 
 | Method | Path | Description |
 |---|---:|---|
-| `GET` | `/api/tasks/` | List active tasks in projects visible to the JWT user. |
+| `GET` | `/api/tasks/` | List active tasks in categories visible to the JWT user. |
 | `POST` | `/api/tasks/` | Create a task. |
 | `GET` | `/api/tasks/{id}/` | Read one visible task. |
 | `PATCH` | `/api/tasks/{id}/` | Update one task where the caller can contribute. |
 | `DELETE` | `/api/tasks/{id}/` | Soft-delete one task if caller is author or project admin. |
 | `POST` | `/api/tasks/{id}/complete` | Mark a task complete. |
 | `POST` | `/api/tasks/{id}/archive` | Archive a task without deleting it. |
+| `GET` | `/api/tasks/{id}/activity` | List persisted task activity entries. |
 | `GET` | `/api/tasks/{id}/permissions` | Permission summary for other services. |
 
 Create payload:
 
 ```json
 {
-  "project_id": 1,
+  "category_id": 1,
   "title": "first task",
+  "status": "todo",
   "done": false
 }
 ```
@@ -94,6 +96,7 @@ Task responses include a derived `done` boolean for frontend compatibility:
 ```json
 {
   "id": 1,
+  "category_id": 1,
   "project_id": 1,
   "workspace_id": 1,
   "author_user_id": 1,
@@ -105,7 +108,7 @@ Task responses include a derived `done` boolean for frontend compatibility:
   "completed_at": null,
   "archived_at": null,
   "deleted_at": null,
-  "status": { "id": 1, "name": "Todo", "slug": "todo" },
+  "status": "todo",
   "created_at": "2026-07-11T00:00:00.000Z",
   "updated_at": "2026-07-11T00:00:00.000Z"
 }
@@ -119,23 +122,24 @@ Supporting routes:
 - `/api/tasks/{id}/dependencies`
 - `/api/tasks/{id}/recurrence`
 - `/api/tasks/{id}/reminders`
-- `/api/tasks/{id}/comments`
-- `/api/tasks/statuses`
+- `/api/tasks/{id}/activity`
 - `/api/tasks/kanban-columns`
 - `/api/tasks/saved-filters`
 
 ## Validation
 
 - Unknown payload fields are rejected.
-- `project_id` is required on create and must point to a project where the
+- `category_id` is required on create and must point to a category where the
   caller can contribute.
 - `title` is required on create and limited to 200 characters.
 - `priority` must be one of `low`, `normal`, `high`, `urgent`.
+- `status` must be one of `backlog`, `todo`, `in_progress`, `review`, `done`,
+  `archived`.
 - Deadlines and reminders must be ISO datetime strings.
 - Assignee IDs must be positive integers.
 - Dependencies must point to tasks where the caller can contribute.
 - Self-dependencies and circular dependencies are rejected.
-- Soft-deleted tasks and comments are hidden from normal reads.
+- Soft-deleted tasks are hidden from normal reads.
 
 ## Environment Variables
 
@@ -150,7 +154,7 @@ Supporting routes:
 | `POSTGRES_PASSWORD` | In Compose | DB password, defaults to `todo`. |
 | `TASK_SCHEMA_SYNC` | No | Local schema sync toggle. Use `false` in production. |
 | `WORKSPACE_SERVICE_BASE_URL` | In Compose | Internal workspace-service URL. |
-| `PROJECT_SERVICE_BASE_URL` | In Compose | Internal project-service URL. |
+| `CATEGORY_SERVICE_BASE_URL` | In Compose | Internal category-service URL. |
 | `RABBITMQ_URL` | No | AMQP URL for domain event publishing. |
 | `RABBITMQ_EXCHANGE` | No | Topic exchange for domain events, defaults to `flowforge.events`. |
 

@@ -33,7 +33,7 @@ Every event uses this JSON envelope:
   "eventId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
   "eventType": "task.created",
   "occurredAt": "2026-07-12T12:00:00Z",
-  "producer": "task-service",
+  "producer": "comment-service",
   "actorUserId": 123,
   "resource": {
     "type": "task",
@@ -261,17 +261,17 @@ Published after a task comment is soft-deleted.
 }
 ```
 
-### `project-service`
+### `category-service`
 
-Project events use the same envelope and publish non-sensitive lifecycle/access
+Category events use the same envelope and publish non-sensitive lifecycle/access
 changes:
 
-- `project.created`
-- `project.updated`
-- `project.archived`
-- `project.deleted`
-- `project.invited`
-- `project.member_role_changed`
+- `category.created`
+- `category.updated`
+- `category.archived`
+- `category.deleted`
+- `category.invited`
+- `category.member_role_changed`
 
 Invitation tokens are not published.
 

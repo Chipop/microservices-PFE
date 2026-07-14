@@ -1,3 +1,4 @@
+from django.db.models import Q
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -11,6 +12,7 @@ from .permissions import HasValidToken, IsInternalService
 from .serializers import (
     InternalProfileCreateSerializer,
     ProfilePictureUploadSerializer,
+    ProfileResolveSerializer,
     ProfileSerializer,
     ProfileUpdateSerializer,
     PublicProfileSerializer,
@@ -42,6 +44,8 @@ class ProfileViewSet(viewsets.ModelViewSet):
             return ProfileUpdateSerializer
         if self.action == "public":
             return PublicProfileSerializer
+        if self.action == "resolve":
+            return ProfileResolveSerializer
         if self.action == "picture":
             return ProfilePictureUploadSerializer
         return ProfileSerializer
@@ -79,6 +83,34 @@ class ProfileViewSet(viewsets.ModelViewSet):
     def public(self, request, username=None):
         profile = generics.get_object_or_404(Profile, username=username)
         return Response(self.get_serializer(profile).data)
+
+    @action(detail=False, methods=["get"], url_path="resolve")
+    def resolve(self, request):
+        raw_ids = request.query_params.get("auth_user_ids", "")
+        ids = []
+        for raw_id in raw_ids.split(","):
+            raw_id = raw_id.strip()
+            if not raw_id:
+                continue
+            try:
+                ids.append(int(raw_id))
+            except ValueError:
+                return Response(
+                    {"auth_user_ids": "Expected a comma-separated list of integer auth user ids."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        if not ids:
+            return Response([])
+        profiles = Profile.objects.filter(auth_user_id__in=ids)
+        return Response(self.get_serializer(profiles, many=True).data)
+
+    @action(detail=False, methods=["get"], url_path="search")
+    def search(self, request):
+        query = request.query_params.get("q", "").strip()
+        profiles = Profile.objects.order_by("email", "username")
+        if query:
+            profiles = profiles.filter(Q(email__icontains=query) | Q(username__icontains=query))
+        return Response(ProfileResolveSerializer(profiles[:10], many=True).data)
 
     @action(
         detail=False,

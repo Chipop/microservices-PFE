@@ -13,6 +13,7 @@ public record SearchProperties(
 ) {
     public record Source(
             String taskServiceBaseUrl,
+            String commentServiceBaseUrl,
             String workspaceServiceBaseUrl,
             String projectServiceBaseUrl,
             String userServiceBaseUrl
