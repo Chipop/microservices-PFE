@@ -1,0 +1,1 @@
+<template><main class="simple-auth"><div class="empty-state"><h1>404</h1><h2>This page wandered off</h2><p>The route does not exist, which is apparently still a thing applications must explain.</p><RouterLink class="btn btn-primary" to="/home">Go home</RouterLink></div></main></template>

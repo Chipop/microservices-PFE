@@ -1,0 +1,55 @@
+server:
+  port: ${PORT:8000}
+
+spring:
+  application:
+    name: search-service
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+search:
+  jwt-signing-key: ${JWT_SIGNING_KEY}
+  internal-api-key: ${INTERNAL_API_KEY:}
+  cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:*}
+  elasticsearch-url: ${ELASTICSEARCH_URL:http://localhost:9200}
+  index-prefix: ${SEARCH_INDEX_PREFIX:flowforge}
+  source:
+    task-service-base-url: ${TASK_SERVICE_BASE_URL:http://task-service:8000}
+    workspace-service-base-url: ${WORKSPACE_SERVICE_BASE_URL:http://workspace-service:8000}
+    project-service-base-url: ${PROJECT_SERVICE_BASE_URL:http://project-service:8000}
+    user-service-base-url: ${USER_SERVICE_BASE_URL:http://user-service:8000}
+
+events:
+  exchange: ${RABBITMQ_EXCHANGE:flowforge.events}
+  queue: ${SEARCH_QUEUE:search-service.events}
+  dead-letter-exchange: ${SEARCH_DLX:search-service.events.dlx}
+  dead-letter-queue: ${SEARCH_DLQ:search-service.events.dlq}
+  dead-letter-routing-key: ${SEARCH_DLQ_ROUTING_KEY:search-service.events.failed}
+  max-attempts: ${SEARCH_MAX_ATTEMPTS:3}
+  retry-backoff-ms: ${SEARCH_RETRY_BACKOFF_MS:1000}
+  routing-keys:
+    - task.created
+    - task.updated
+    - task.deleted
+    - task.comment.created
+    - task.comment.updated
+    - task.comment.deleted
+    - workspace.created
+    - workspace.updated
+    - workspace.deleted
+    - workspace.access_updated
+    - project.created
+    - project.updated
+    - project.archived
+    - project.deleted
+    - project.invited
+    - project.member_role_changed
+    - user.profile.created
+    - user.profile.updated
+
+rabbitmq:
+  url: ${RABBITMQ_URL:amqp://guest:guest@localhost:5672/}

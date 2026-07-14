@@ -1,9 +1,10 @@
-# Todos — Microservices Platform
+# Tasks — Microservices Platform
 
-A small TODO application built to demonstrate a **microservices architecture**:
-three independent services under `server/` — two in **Django** (auth, profiles) and one in
-**NestJS** (todos) — behind an **nginx API gateway**, **each with its own
-PostgreSQL database** (database-per-service), with a **Quasar (Vue 3)**
+A task management application built to demonstrate a **microservices architecture**:
+five independent services under `server/` — two in **Django** (auth, profiles),
+one in **NestJS** (tasks), and two in **Spring Boot** (workspaces, attachments) — behind an
+**nginx API gateway**, **each with its own
+PostgreSQL database** (database-per-service), with a **Vue 3 + Vite**
 single-page frontend.
 
 ```
@@ -11,25 +12,25 @@ single-page frontend.
    Browser (SPA :9000) ──▶│   API Gateway — nginx :8080   │
                           └──────────────┬───────────────┘
                                          │ routes by URL prefix
-         ┌───────────────────────────────┼───────────────────────────────┐
-         ▼                               ▼                                ▼
-  /api/auth/  ───▶ auth-service    /api/profiles/ ─▶ user-service    /api/todos/ ─▶ todo-service
-   (8002, Django)                    (8001, Django)                   (8003, NestJS)
-   register / login / JWT            user profiles                    JWT-scoped CRUD
-         │                               │                                │
-         ▼                               ▼                                ▼
-   auth-db  :5433                   users-db :5434                   todos-db :5432
+         ┌──────────────────────┬──────────────────────┬──────────────────────┬──────────────────────┐
+         ▼                      ▼                      ▼                      ▼                      ▼
+  /api/auth/              /api/profiles/          /api/tasks/           /api/workspaces/      /api/attachments/
+  auth-service            user-service            task-service          workspace-service     attachment-service
+  (8002, Django)          (8001, Django)          (8003, NestJS)        (8004, Spring Boot)   (8005, Spring Boot)
+  register / login / JWT  user profiles           JWT-scoped tasks      memberships           task files
+         │                      │                      │                      │                      │
+         ▼                      ▼                      ▼                      ▼                      ▼
+   auth-db  :5433          users-db :5434          tasks-db :5435       workspaces-db :5436   attachments-db :5437
    (Postgres)                       (Postgres)                       (Postgres)
    one database per service — separate containers & volumes, share nothing
 
-  On register, auth-service calls the gateway → user-service to create the profile (réception).
+  On register, auth-service publishes `user.registered`; profile, workspace, and email consumers react asynchronously.
   Every service validates the same JWT, signed with one shared HS256 secret (`user_id` claim).
 ```
 
-> **Note:** `todos` was originally a Django service (`server/legacy-todo-service/`). It has been
-> **replaced by `server/todo-service/`**, which serves the exact same `/api/todos/` contract
-> on the same port (8003) and validates the same shared JWT. The Django version is
-> kept in the repo (commented out in `docker-compose.yml`) for reference.
+> **Note:** task management is now owned by `server/task-service/`. The former
+> Django todo implementation remains in `server/legacy-todo-service/` for
+> reference, but the active public contract is `/api/tasks/`.
 
 ---
 
@@ -37,12 +38,15 @@ single-page frontend.
 
 | Layer | Stack |
 |-------|-------|
-| **Frontend** | Quasar 2 (Vue 3, `<script setup>`), TypeScript, Pinia (stores), Vue Router (file-based routing), Vite |
+| **Frontend** | Vue 3, TypeScript, Pinia, Vue Router, Vite |
 | **Auth + Profiles services** | Django 5.2, Django REST Framework, `djangorestframework-simplejwt` (JWT auth) |
-| **Todos service** | NestJS 11 (TypeScript), TypeORM, `class-validator`, `@nestjs/jwt` (stateless HS256 verification) |
+| **Task service** | NestJS 11 (TypeScript), TypeORM, `class-validator`, `@nestjs/jwt` (stateless HS256 verification) |
+| **Workspace service** | Spring Boot 3, Maven, Java 21, Spring Security resource server, Spring Data JPA, Flyway |
+| **Attachment service** | Spring Boot 3, Maven, Java 21, Spring Security resource server, Spring Data JPA, Flyway, Azure Blob Storage SDK |
 | **API Gateway** | nginx (alpine) — reverse proxy / single entry point |
 | **Auth** | JWT (HS256), one shared `JWT_SIGNING_KEY` across all services; identity in the `user_id` claim |
-| **Database** | PostgreSQL 16 — **one container per service** (`auth-db`, `users-db`, `todos-db`), each with its own volume; services share nothing |
+| **Database** | PostgreSQL 16 — **one container per service** (`auth-db`, `users-db`, `tasks-db`, `workspaces-db`), each with its own volume; services share nothing |
+| **Events** | RabbitMQ topic exchange `flowforge.events`; producer services publish `resource.event` routing keys |
 | **Runtime** | Docker + Docker Compose (one network, `todonet`) |
 | **Test** | `integration-tests/test_services.py` — cross-service end-to-end check (Python `requests`) |
 
@@ -55,45 +59,81 @@ The single public entry point. Routes incoming requests by URL prefix to the
 right service and passes CORS headers through. Clients only ever talk to `:8080`.
 - `/api/auth/` → auth-service
 - `/api/profiles/` → user-service
-- `/api/todos/` → todo-service
+- `/api/tasks/` → task-service
+- `/api/workspaces/` → workspace-service
+- `/api/attachments/` → attachment-service
 
 ### `server/auth-service/` — Auth service (port 8002, Django)
 Owns user accounts and credentials. Issues JWTs. Persists to its own `auth-db` Postgres container.
-- `POST /api/auth/register/` — create an account (then calls the gateway to create the matching profile)
+- `POST /api/auth/register/` — create an account and publish `user.registered`
 - `POST /api/auth/login/` — returns `{ access, refresh }`
 - `POST /api/auth/refresh/` — new access token from a refresh token
 
 ### `server/user-service/` — User/Profile service (port 8001, Django)
-Stores a read-only "profile" mirror of each user. A profile is created **only**
-via an internal call carrying the `X-Internal-Key` (never by an end user).
-Persists to its own `users-db` Postgres container.
+Owns user profile metadata and profile-picture storage integration. A profile is
+created by consuming `user.registered`; authenticated users can read and update
+safe profile fields. Persists metadata to its own `users-db`
+Postgres container and stores profile-picture objects through the configured
+storage backend.
 - `GET /api/profiles/` — returns the caller's own profile (JWT-scoped)
-- `POST /api/profiles/` — internal only (used by auth-service during registration)
+- `POST /api/profiles/` — internal profile creation endpoint
+- `PATCH /api/profiles/{id}/` — update safe profile fields
+- `GET /api/profiles/public/{username}/` — public profile fields
+- `POST / PUT / DELETE /api/profiles/picture/` — upload, replace, or remove profile picture
 
-### `server/todo-service/` — Todo service (port 8003, NestJS)
-The actual TODO CRUD, and a **drop-in replacement** for the former Django todo service.
-Every todo is scoped to the `user_id` inside the JWT, so users only ever see
-their own (a cross-user id is a `404`). Auth is **stateless**: the service has no
+### `server/task-service/` — Task service (port 8003, NestJS)
+Owns workspace-scoped task CRUD plus task metadata such as statuses, priorities, deadlines,
+assignments, tags, subtasks, dependencies, recurrence configuration, reminders,
+Kanban columns, saved filters, and comments. Task access is checked through
+workspace visibility/contribution permissions. Auth is **stateless**: the service has no
 users table — it verifies the shared HS256 JWT and trusts the `user_id` claim.
-Persists to its own `todos-db` Postgres container via TypeORM.
-- `GET / POST /api/todos/`
-- `GET / PATCH / DELETE /api/todos/{id}/`
+Persists to its own `tasks-db` Postgres container via TypeORM.
+- `GET / POST /api/tasks/`
+- `GET / PATCH / DELETE /api/tasks/{id}/`
+- `POST /api/tasks/{id}/complete`
+- `POST /api/tasks/{id}/archive`
+- `GET / POST /api/tasks/{id}/comments`
 
-  Todo shape: `{ id, title, done, created_at }` (`user_id` comes from the JWT,
-  never the client).
+  Task responses include `done` as a derived compatibility field, while the
+  service stores richer task state internally.
+
+### `server/workspace-service/` — Workspace service (port 8004, Spring Boot)
+Owns workspace membership, visibility, personal workspace creation, and invitation workflows. It validates the shared JWT,
+extracts the `user_id` claim, and enforces fixed workspace roles internally.
+Persists to its own `workspaces-db` Postgres container via Spring Data JPA and
+Flyway.
+- `GET / POST /api/workspaces/`
+- `GET / PATCH / DELETE /api/workspaces/{id}`
+- `GET /api/workspaces/{id}/permissions/me`
+- `POST /api/workspaces/{id}/archive`
+- `GET / POST /api/workspaces/{id}/invitations`
+- `POST /api/workspaces/invitations/{token}/accept`
+
+### `server/attachment-service/` — Attachment service (port 8005, Spring Boot)
+Owns attachment metadata and Azure Blob Storage integration for task and comment files. It
+validates the shared JWT, checks task visibility by calling `task-service` with
+the caller's bearer token, stores metadata in its own `attachments-db`, and
+keeps file bytes in the configured private Azure Blob container. Deletes hide
+attachment metadata but retain Azure blobs for audit.
+- `POST /api/attachments/tasks/{taskId}` — upload a file to a visible task
+- `GET /api/attachments/tasks/{taskId}` — list task attachments
+- `POST / GET /api/attachments/tasks/{taskId}/comments/{commentId}` — manage comment attachments
+- `GET /api/attachments/{attachmentId}` — read attachment metadata
+- `POST /api/attachments/{attachmentId}/download-link` — generate a signed download URL
+- `DELETE /api/attachments/{attachmentId}` — delete an attachment uploaded by the caller
 
 ### `server/legacy-todo-service/` — Former Todo service (Django, retired)
 The original Django implementation, kept for reference. It is **commented out** in
-`docker-compose.yml`; `todo-service` now occupies port 8003 in its place.
+`docker-compose.yml`; `task-service` now occupies port 8003 in its place.
 
-### `frontend/` — Quasar SPA
-Login, register, todos CRUD and profile pages. All API calls go through the
-single gateway origin (`http://localhost:8080`). State lives in Pinia stores
-(`auth`, `todos`); a route guard protects authenticated pages. The frontend is
-unchanged by the todos swap — the `/api/todos/` contract is identical.
+### `ui/` — Vue SPA
+Login, register, workspace/project/task pages, search, profile, and realtime
+in-app notifications. All API calls go through the single gateway origin
+(`http://localhost:8080`). State lives in Pinia stores; a route guard protects
+authenticated pages.
 
 ### `integration-tests/test_services.py` — End-to-end test
-Walks the real cross-service flow (register → login → todos CRUD → profile
+Walks the real cross-service flow (register → login → tasks CRUD → profile
 scoping → internal-key guards) and prints PASS/FAIL per check.
 
 ---
@@ -107,7 +147,7 @@ From the repo root:
 docker compose up -d --build
 ```
 
-This starts all containers on the `todonet` network, including the Quasar
+This starts all containers on the `todonet` network, including the Vue
 frontend built as static files and served by nginx. Each service's Postgres
 comes up first (with a healthcheck); the service waits for its own DB before
 migrating/starting:
@@ -118,10 +158,15 @@ migrating/starting:
 | `frontend` | http://localhost:9000 |
 | `auth-service` | http://localhost:8002 |
 | `user-service` | http://localhost:8001 |
-| `todo-service` | http://localhost:8003 |
+| `task-service` | http://localhost:8003 |
+| `workspace-service` | http://localhost:8004 |
+| `attachment-service` | http://localhost:8005 |
+| `flowforge-rabbitmq` | AMQP `localhost:5672`, management UI http://localhost:15672 |
 | `auth-db` (PostgreSQL) | localhost:5433 (`todo` / `todo`) |
 | `users-db` (PostgreSQL) | localhost:5434 (`todo` / `todo`) |
-| `todos-db` (PostgreSQL) | localhost:5432 (`todo` / `todo`) |
+| `tasks-db` (PostgreSQL) | localhost:5435 (`todo` / `todo`) |
+| `workspaces-db` (PostgreSQL) | localhost:5436 (`todo` / `todo`) |
+| `attachments-db` (PostgreSQL) | localhost:5437 (`todo` / `todo`) |
 
 > The gateway is the intended entry point. The individual `8001/8002/8003`
 > ports are still exposed for convenience and for `integration-tests/test_services.py`.
@@ -132,9 +177,9 @@ migrating/starting:
 ### 2. Run the frontend outside Docker, if needed
 
 ```bash
-cd frontend
+cd ui
 npm install
-npx quasar dev      # opens http://localhost:9000
+npm run dev         # opens http://localhost:5173
 ```
 
 Register a new account in the UI, or log in with one you created.
@@ -155,16 +200,24 @@ python integration-tests/test_services.py
 
 - All services share the same `JWT_SIGNING_KEY` and `INTERNAL_API_KEY`
   (set in `docker-compose.yml`) — these are **dev secrets**, change them for
-  any real deployment. `todo-service` reads `JWT_SIGNING_KEY` and verifies the
+  any real deployment. `task-service` reads `JWT_SIGNING_KEY` and verifies the
   token with HS256 — it must match the key `auth-service` signs with.
 - Persistence is **database-per-service**: each service has its own PostgreSQL
-  container (`auth-db`, `users-db`, `todos-db`) with its own Docker volume
-  (`auth_pgdata`, `users_pgdata`, `todos_pgdata`). Services share nothing at the
+  container (`auth-db`, `users-db`, `tasks-db`, `workspaces-db`, `attachments-db`) with its own Docker volume
+  (`auth_pgdata`, `users_pgdata`, `tasks_pgdata`, `workspaces_pgdata`, `attachments_pgdata`). Services share nothing at the
   data layer — they communicate only over HTTP. Each DB is created by its
   container's `POSTGRES_DB`.
-- `todo-service` runs TypeORM with `synchronize: true`, so its `todos` table is
-  created automatically on first boot — convenient for dev; switch to migrations
-  before production.
+- Domain events are published to RabbitMQ by `auth-service`, `task-service`,
+  `workspace-service`, and `attachment-service`. The event envelope, routing
+  keys, payload fields, and added dependencies are documented in
+  [`server/EVENTS.md`](server/EVENTS.md).
+- `task-service` runs TypeORM with `TASK_SCHEMA_SYNC=true` in local Compose so
+  task tables are created automatically on first boot. Set it to `false` and run
+  explicit migrations before production.
+- `workspace-service` uses Flyway migrations and Hibernate schema validation.
+- `attachment-service` uses Flyway migrations and Hibernate schema validation.
+  It stores file metadata in Postgres and file bytes in the private Azure Blob
+  container configured by `AZURE_STORAGE_CONTAINER` and Azure storage credentials.
 - CORS is enabled for local development (Django middleware / NestJS `enableCors`).
   Restrict it to the frontend origin before deploying.
 - The Django services fall back to SQLite when `POSTGRES_HOST` is unset, so a

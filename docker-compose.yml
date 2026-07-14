@@ -1,6 +1,4 @@
 services:
-  # --- One database PER microservice (true database-per-service). Each owns its
-  #     own Postgres container, volume, and host port. Services share nothing. ---
   auth-db:
     image: postgres:16-alpine
     container_name: auth-db
@@ -17,7 +15,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    networks: [todonet]
+    networks: [flowforge-platform-network]
 
   users-db:
     image: postgres:16-alpine
@@ -35,25 +33,115 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    networks: [todonet]
+    networks: [flowforge-platform-network]
 
-  todos-db:
+  tasks-db:
     image: postgres:16-alpine
-    container_name: todos-db
+    container_name: tasks-db
     environment:
       - POSTGRES_USER=todo
       - POSTGRES_PASSWORD=todo
-      - POSTGRES_DB=todos
+      - POSTGRES_DB=tasks
     volumes:
-      - todos_pgdata:/var/lib/postgresql/data
+      - tasks_pgdata:/var/lib/postgresql/data
     ports:
       - "5435:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U todo -d todos"]
+      test: ["CMD-SHELL", "pg_isready -U todo -d tasks"]
       interval: 5s
       timeout: 5s
       retries: 10
-    networks: [todonet]
+    networks: [flowforge-platform-network]
+
+  workspaces-db:
+    image: postgres:16-alpine
+    container_name: workspaces-db
+    environment:
+      - POSTGRES_USER=todo
+      - POSTGRES_PASSWORD=todo
+      - POSTGRES_DB=workspaces
+    volumes:
+      - workspaces_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5436:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U todo -d workspaces"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [flowforge-platform-network]
+
+  projects-db:
+    image: postgres:16-alpine
+    container_name: projects-db
+    environment:
+      - POSTGRES_USER=todo
+      - POSTGRES_PASSWORD=todo
+      - POSTGRES_DB=projects
+    volumes:
+      - projects_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5440:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U todo -d projects"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [flowforge-platform-network]
+
+  attachments-db:
+    image: postgres:16-alpine
+    container_name: attachments-db
+    environment:
+      - POSTGRES_USER=todo
+      - POSTGRES_PASSWORD=todo
+      - POSTGRES_DB=attachments
+    volumes:
+      - attachments_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5437:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U todo -d attachments"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [flowforge-platform-network]
+
+  notifications-db:
+    image: postgres:16-alpine
+    container_name: notifications-db
+    environment:
+      - POSTGRES_USER=todo
+      - POSTGRES_PASSWORD=todo
+      - POSTGRES_DB=notifications
+    volumes:
+      - notifications_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5438:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U todo -d notifications"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [flowforge-platform-network]
+
+  emails-db:
+    image: postgres:16-alpine
+    container_name: emails-db
+    environment:
+      - POSTGRES_USER=todo
+      - POSTGRES_PASSWORD=todo
+      - POSTGRES_DB=emails
+    volumes:
+      - emails_pgdata:/var/lib/postgresql/data
+    ports:
+      - "5439:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U todo -d emails"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [flowforge-platform-network]
 
   user-service:
     build: ./server/user-service
@@ -66,6 +154,21 @@ services:
       - POSTGRES_DB=users
       - POSTGRES_USER=todo
       - POSTGRES_PASSWORD=todo
+      - PROFILE_STORAGE_BACKEND=azure
+      - AZURE_STORAGE_CONTAINER=flowforge-bucket
+      - AZURE_STORAGE_CONNECTION_STRING=${AZURE_STORAGE_CONNECTION_STRING}
+      - PROFILE_PICTURE_MAX_BYTES=2097152
+      - PROFILE_PICTURE_ALLOWED_CONTENT_TYPES=image/jpeg,image/png,image/webp
+      - PROFILE_PICTURE_SIGNED_URL_TTL_SECONDS=900
+      - PROFILE_PICTURE_KEY_PREFIX=profile-pictures
+      - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
+      - RABBITMQ_EXCHANGE=flowforge.events
+      - USER_EVENTS_QUEUE=user-service.events
+      - USER_EVENTS_DLX=user-service.events.dlx
+      - USER_EVENTS_DLQ=user-service.events.dlq
+      - USER_EVENTS_DLQ_ROUTING_KEY=user-service.events.failed
+      - USER_EVENTS_MAX_ATTEMPTS=3
+      - USER_EVENTS_RETRY_BACKOFF_MS=1000
     volumes:
       - ./server/user-service:/app
     ports:
@@ -73,7 +176,9 @@ services:
     depends_on:
       users-db:
         condition: service_healthy
-    networks: [todonet]
+      rabbitmq:
+        condition: service_healthy
+    networks: [flowforge-platform-network]
 
   auth-service:
     build: ./server/auth-service
@@ -81,13 +186,12 @@ services:
     environment:
       - JWT_SIGNING_KEY=this-is-a-much-longer-shared-secret-key-32plus
       - INTERNAL_API_KEY=INTERNAL-CHANGE-ME
-      # Auth reaches the Profiles service THROUGH the gateway (réception call).
-      - GATEWAY_URL=http://api-gateway
       - POSTGRES_HOST=auth-db
       - POSTGRES_PORT=5432
       - POSTGRES_DB=auth
       - POSTGRES_USER=todo
       - POSTGRES_PASSWORD=todo
+      - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
     volumes:
       - ./server/auth-service:/app
     ports:
@@ -95,11 +199,11 @@ services:
     depends_on:
       auth-db:
         condition: service_healthy
-    networks: [todonet]
+      rabbitmq:
+        condition: service_healthy
+    networks: [flowforge-platform-network]
 
-  # --- legacy-todo-service REPLACED by todo-service (kept here, commented, still works
-  #     if you ever swap back). The NestJS service below takes over host port
-  #     8003, so the gateway upstream contract is unchanged. ---
+  # --- legacy-todo-service 
   # legacy-todo-service:
   #   build: ./server/legacy-todo-service
   #   container_name: legacy-todo-service
@@ -110,29 +214,208 @@ services:
   #     - ./server/legacy-todo-service:/app
   #   ports:
   #     - "8003:8000"
-  #   networks: [todonet]
+  #   networks: [flowforge-platform-network]
 
-  todo-service:
-    build: ./server/todo-service
-    container_name: todo-service
+  task-service:
+    build: ./server/task-service
+    container_name: task-service
     environment:
-      # Same shared secret + HS256 + `user_id` claim as auth-service issues.
       - JWT_SIGNING_KEY=this-is-a-much-longer-shared-secret-key-32plus
       - PORT=8000
-      - POSTGRES_HOST=todos-db
+      - POSTGRES_HOST=tasks-db
       - POSTGRES_PORT=5432
-      - POSTGRES_DB=todos
+      - POSTGRES_DB=tasks
       - POSTGRES_USER=todo
       - POSTGRES_PASSWORD=todo
+      - TASK_SCHEMA_SYNC=true
+      - INTERNAL_API_KEY=INTERNAL-CHANGE-ME
+      - WORKSPACE_SERVICE_BASE_URL=http://workspace-service:8000
+      - PROJECT_SERVICE_BASE_URL=http://project-service:8000
+      - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
     ports:
       - "8003:8000"
     depends_on:
-      todos-db:
+      tasks-db:
         condition: service_healthy
-    networks: [todonet]
+      rabbitmq:
+        condition: service_healthy
+      project-service:
+        condition: service_started
+    networks: [flowforge-platform-network]
 
-  # API Gateway — the single public entry point. Routes /api/auth, /api/profiles
-  # and /api/todos to the right service. Clients only need this one origin.
+  workspace-service:
+    build: ./server/workspace-service
+    container_name: workspace-service
+    environment:
+      - JWT_SIGNING_KEY=this-is-a-much-longer-shared-secret-key-32plus
+      - INTERNAL_API_KEY=INTERNAL-CHANGE-ME
+      - PORT=8000
+      - POSTGRES_HOST=workspaces-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=workspaces
+      - POSTGRES_USER=todo
+      - POSTGRES_PASSWORD=todo
+      - WORKSPACE_INVITATION_TTL_HOURS=168
+      - CORS_ALLOWED_ORIGINS=*
+      - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
+      - RABBITMQ_EXCHANGE=flowforge.events
+      - WORKSPACE_QUEUE=workspace-service.events
+      - WORKSPACE_DLX=workspace-service.events.dlx
+      - WORKSPACE_DLQ=workspace-service.events.dlq
+      - WORKSPACE_DLQ_ROUTING_KEY=workspace-service.events.failed
+      - WORKSPACE_MAX_ATTEMPTS=3
+      - WORKSPACE_RETRY_BACKOFF_MS=1000
+    ports:
+      - "8004:8000"
+    depends_on:
+      workspaces-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks: [flowforge-platform-network]
+
+  project-service:
+    build: ./server/project-service
+    container_name: project-service
+    environment:
+      - JWT_SIGNING_KEY=this-is-a-much-longer-shared-secret-key-32plus
+      - INTERNAL_API_KEY=INTERNAL-CHANGE-ME
+      - PORT=8000
+      - POSTGRES_HOST=projects-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=projects
+      - POSTGRES_USER=todo
+      - POSTGRES_PASSWORD=todo
+      - PROJECT_SCHEMA_SYNC=true
+      - PROJECT_INVITATION_TTL_HOURS=168
+      - WORKSPACE_SERVICE_BASE_URL=http://workspace-service:8000
+      - USER_SERVICE_BASE_URL=http://user-service:8000
+      - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
+      - RABBITMQ_EXCHANGE=flowforge.events
+    ports:
+      - "8009:8000"
+    depends_on:
+      projects-db:
+        condition: service_healthy
+      workspace-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    networks: [flowforge-platform-network]
+
+  attachment-service:
+    build: ./server/attachment-service
+    container_name: attachment-service
+    environment:
+      - JWT_SIGNING_KEY=this-is-a-much-longer-shared-secret-key-32plus
+      - PORT=8000
+      - POSTGRES_HOST=attachments-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=attachments
+      - POSTGRES_USER=todo
+      - POSTGRES_PASSWORD=todo
+      - CORS_ALLOWED_ORIGINS=*
+      - TASK_SERVICE_BASE_URL=http://task-service:8000
+      - AZURE_STORAGE_CONTAINER=flowforge-bucket
+      - AZURE_STORAGE_CONNECTION_STRING=${AZURE_STORAGE_CONNECTION_STRING}
+      - ATTACHMENT_MAX_BYTES=10485760
+      - ATTACHMENT_ALLOWED_CONTENT_TYPES=image/jpeg,image/png,image/webp,application/pdf,text/plain
+      - ATTACHMENT_SIGNED_URL_TTL_SECONDS=900
+      - ATTACHMENT_KEY_PREFIX=attachments
+      - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
+    ports:
+      - "8005:8000"
+    depends_on:
+      attachments-db:
+        condition: service_healthy
+      task-service:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    networks: [flowforge-platform-network]
+
+  notification-service:
+    build: ./server/notification-service
+    container_name: notification-service
+    environment:
+      - JWT_SIGNING_KEY=this-is-a-much-longer-shared-secret-key-32plus
+      - PORT=8000
+      - POSTGRES_HOST=notifications-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=notifications
+      - POSTGRES_USER=todo
+      - POSTGRES_PASSWORD=todo
+      - CORS_ALLOWED_ORIGINS=*
+      - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
+      - RABBITMQ_EXCHANGE=flowforge.events
+      - NOTIFICATION_QUEUE=notification-service.events
+    ports:
+      - "8006:8000"
+    depends_on:
+      notifications-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks: [flowforge-platform-network]
+
+  email-service:
+    build: ./server/email-service
+    container_name: email-service
+    environment:
+      - PORT=8000
+      - POSTGRES_HOST=emails-db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=emails
+      - POSTGRES_USER=todo
+      - POSTGRES_PASSWORD=todo
+      - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
+      - RABBITMQ_EXCHANGE=flowforge.events
+      - EMAIL_QUEUE=email-service.events
+      - SMTP_HOST=${SMTP_HOST:-smtp.example.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USERNAME=${SMTP_USERNAME:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM=${SMTP_FROM:-noreply@flowforge.local}
+      - SMTP_AUTH_ENABLED=${SMTP_AUTH_ENABLED:-true}
+      - SMTP_STARTTLS_ENABLED=${SMTP_STARTTLS_ENABLED:-true}
+      - EMAIL_MAX_ATTEMPTS=${EMAIL_MAX_ATTEMPTS:-3}
+      - EMAIL_RETRY_BACKOFF_MS=${EMAIL_RETRY_BACKOFF_MS:-1000}
+    ports:
+      - "8007:8000"
+    depends_on:
+      emails-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks: [flowforge-platform-network]
+
+  search-service:
+    build: ./server/search-service
+    container_name: search-service
+    environment:
+      - JWT_SIGNING_KEY=this-is-a-much-longer-shared-secret-key-32plus
+      - INTERNAL_API_KEY=INTERNAL-CHANGE-ME
+      - PORT=8000
+      - CORS_ALLOWED_ORIGINS=*
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
+      - RABBITMQ_EXCHANGE=flowforge.events
+      - SEARCH_QUEUE=search-service.events
+      - TASK_SERVICE_BASE_URL=http://task-service:8000
+      - WORKSPACE_SERVICE_BASE_URL=http://workspace-service:8000
+      - PROJECT_SERVICE_BASE_URL=http://project-service:8000
+      - USER_SERVICE_BASE_URL=http://user-service:8000
+    ports:
+      - "8008:8000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+    networks: [flowforge-platform-network]
+
   api-gateway:
     image: nginx:alpine
     container_name: api-gateway
@@ -143,25 +426,90 @@ services:
     depends_on:
       - auth-service
       - user-service
-      - todo-service
-    networks: [todonet]
+      - task-service
+      - workspace-service
+      - attachment-service
+      - notification-service
+      - email-service
+      - search-service
+      - project-service
+    networks: [flowforge-platform-network]
 
   frontend:
     build:
-      context: ./frontend
+      context: ./ui
       args:
         VITE_GATEWAY_URL: http://localhost:8080
+        VITE_USE_MOCKS: "false"
     container_name: frontend
     ports:
       - "9000:9000"
     depends_on:
       - api-gateway
-    networks: [todonet]
+    networks: [flowforge-platform-network]
+  
+  rabbitmq:
+    image: rabbitmq:4.3.2-management-alpine
+    container_name: flowforge-rabbitmq
+    hostname: flowforge-rabbitmq
+
+    environment:
+      RABBITMQ_DEFAULT_USER: flowforge
+      RABBITMQ_DEFAULT_PASS: flowforge_password
+      RABBITMQ_DEFAULT_VHOST: flowforge
+
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+    networks:
+      - flowforge-platform-network
+
+    restart: unless-stopped
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: flowforge-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks:
+      - flowforge-platform-network
 
 volumes:
   auth_pgdata:
   users_pgdata:
-  todos_pgdata:
+  tasks_pgdata:
+  workspaces_pgdata:
+  projects_pgdata:
+  attachments_pgdata:
+  notifications_pgdata:
+  emails_pgdata:
+  rabbitmq_data:
+  elasticsearch_data:
 
 networks:
-  todonet:
+  flowforge-platform-network:
+    name: flowforge-platform-network
+    driver: bridge

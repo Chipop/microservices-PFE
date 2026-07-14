@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'rest_framework',
+    'rest_framework_simplejwt.token_blacklist',
     'auth_app',
 ]
 
@@ -148,6 +149,8 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
     "ALGORITHM": "HS256",
     "SIGNING_KEY": os.environ["JWT_SIGNING_KEY"],   # ← copy this EXACT string to every service
+    "ROTATE_REFRESH_TOKENS": False,
+    "BLACKLIST_AFTER_ROTATION": True,
 }
 
 REST_FRAMEWORK = {
@@ -156,3 +159,9 @@ REST_FRAMEWORK = {
     ),
 }
 
+EMAIL_BACKEND = os.environ.get(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend",
+)
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@example.com")
+AUTH_REQUIRE_EMAIL_VERIFICATION = os.environ.get("AUTH_REQUIRE_EMAIL_VERIFICATION", "false").lower() == "true"

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-End-to-end test for the TODO microservice platform.
+End-to-end test for the task microservice platform.
 
 Walks the real cross-service flow:
-  Auth (register -> login -> JWT)  ->  Todos (JWT-scoped CRUD)  ->  Profiles (réception + scoped reads)
+  Auth (register -> login -> JWT)  ->  Tasks / Workspaces (JWT-scoped)  ->  Profiles
 
 Run from anywhere that can reach the host ports:
     pip install requests
@@ -22,7 +22,9 @@ import requests
 # ---------------------------------------------------------------------------
 AUTH     = "http://localhost:8002/api/auth"
 PROFILES = "http://localhost:8001/api/profiles"
-TODOS    = "http://localhost:8003/api/todos"
+TASKS    = "http://localhost:8003/api/tasks"
+WORKSPACES = "http://localhost:8004/api/workspaces"
+NOTIFICATIONS = "http://localhost:8006/api/notifications"
 
 INTERNAL_KEY = "INTERNAL-CHANGE-ME"   # must equal INTERNAL_API_KEY in compose
 
@@ -96,29 +98,45 @@ def main():
           detail=f"got {r.status_code if r else 'no response'}")
 
     # -----------------------------------------------------------------------
-    section("3. TODOS — JWT is required (the core cross-service proof)")
+    section("3. TASKS / NOTIFICATIONS — JWT is required")
     # -----------------------------------------------------------------------
     # No token -> must be rejected
-    r = safe("post", f"{TODOS}/", json={"title": "should fail"})
-    check("create todo WITHOUT token is rejected (401)",
+    r = safe("post", f"{TASKS}/", json={"title": "should fail"})
+    check("create task WITHOUT token is rejected (401)",
           r is not None and r.status_code == 401,
           detail=f"got {r.status_code if r else 'no response'}")
 
-    # With token -> created, scoped to this user
-    r = safe("post", f"{TODOS}/", headers=auth_header, json={"title": "first task"})
-    ok = r is not None and r.status_code == 201
-    check("create todo WITH token returns 201", ok,
-          detail=f"got {r.status_code if r else 'no response'}: {r.text if r else ''}")
-    todo_id = r.json().get("id") if ok else None
+    r = safe("get", f"{NOTIFICATIONS}")
+    check("list notifications WITHOUT token is rejected (401)",
+          r is not None and r.status_code == 401,
+          detail=f"got {r.status_code if r else 'no response'}")
 
-    # List -> should contain the todo we just made
-    r = safe("get", f"{TODOS}/", headers=auth_header)
+    r = safe("get", f"{NOTIFICATIONS}/unread-count", headers=auth_header)
+    check("notification unread count WITH token returns 200",
+          r is not None and r.status_code == 200 and "count" in r.json(),
+          detail=f"got {r.status_code if r else 'no response'}: {r.text if r else ''}")
+
+    # With token -> created, scoped to this user
+    r = safe("post", f"{TASKS}/", headers=auth_header, json={"title": "first task"})
+    ok = r is not None and r.status_code == 201
+    check("create task WITH token returns 201", ok,
+          detail=f"got {r.status_code if r else 'no response'}: {r.text if r else ''}")
+    task_id = r.json().get("id") if ok else None
+
+    if task_id:
+        r = safe("patch", f"{TASKS}/{task_id}/", headers=auth_header, json={"done": True})
+        check("complete task through done compatibility returns 200",
+              r is not None and r.status_code == 200 and r.json().get("done") is True,
+              detail=f"got {r.status_code if r else 'no response'}: {r.text if r else ''}")
+
+    # List -> should contain the task we just made
+    r = safe("get", f"{TASKS}/", headers=auth_header)
     titles = [t.get("title") for t in r.json()] if (r and r.status_code == 200) else []
-    check("list todos returns our task", "first task" in titles,
+    check("list tasks returns our task", "first task" in titles,
           detail=f"got {titles}")
 
     # -----------------------------------------------------------------------
-    section("4. TODOS — scoping: a second user can't see the first user's todos")
+    section("4. TASKS — scoping: a second user can't see the first user's tasks")
     # -----------------------------------------------------------------------
     bob = f"bob_{SUFFIX}"
     safe("post", f"{AUTH}/register/",
@@ -126,16 +144,50 @@ def main():
     r = safe("post", f"{AUTH}/login/", json={"username": bob, "password": PASSWORD})
     if r and r.status_code == 200:
         bob_header = {"Authorization": f"Bearer {r.json()['access']}"}
-        r = safe("get", f"{TODOS}/", headers=bob_header)
+        r = safe("get", f"{TASKS}/", headers=bob_header)
         bob_titles = [t.get("title") for t in r.json()] if (r and r.status_code == 200) else []
-        check("second user does NOT see first user's todos",
+        check("second user does NOT see first user's tasks",
               "first task" not in bob_titles,
               detail=f"bob saw {bob_titles}")
+
+        # -------------------------------------------------------------------
+        section("5. WORKSPACES — create, invite, accept, and list members")
+        # -------------------------------------------------------------------
+        r = safe("post", f"{WORKSPACES}/",
+                 headers=auth_header,
+                 json={"name": f"workspace_{SUFFIX}", "description": "integration test"})
+        ok = r is not None and r.status_code == 201 and r.json().get("currentUserRole") == "OWNER"
+        check("create workspace returns 201 and owner role", ok,
+              detail=f"got {r.status_code if r else 'no response'}: {r.text if r else ''}")
+        workspace_id = r.json().get("id") if ok else None
+
+        invitation_token = None
+        if workspace_id:
+            r = safe("post", f"{WORKSPACES}/{workspace_id}/invitations",
+                     headers=auth_header,
+                     json={"email": f"{bob}@test.com", "role": "MEMBER"})
+            ok = r is not None and r.status_code == 201 and r.json().get("token")
+            check("invite workspace member returns a token", ok,
+                  detail=f"got {r.status_code if r else 'no response'}: {r.text if r else ''}")
+            invitation_token = r.json().get("token") if ok else None
+
+        if invitation_token:
+            r = safe("post", f"{WORKSPACES}/invitations/{invitation_token}/accept", headers=bob_header)
+            check("second user accepts workspace invitation",
+                  r is not None and r.status_code == 200 and r.json().get("status") == "ACCEPTED",
+                  detail=f"got {r.status_code if r else 'no response'}: {r.text if r else ''}")
+
+        if workspace_id:
+            r = safe("get", f"{WORKSPACES}/{workspace_id}/members", headers=auth_header)
+            member_ids = [m.get("userId") for m in r.json().get("members", [])] if (r and r.status_code == 200) else []
+            check("workspace member list includes owner and accepted member",
+                  len(member_ids) >= 2,
+                  detail=f"got {member_ids}")
     else:
         check("second user login (for scoping test)", False, detail="could not log in bob")
 
     # -----------------------------------------------------------------------
-    section("5. PROFILES — réception: profile was auto-created on registration")
+    section("6. PROFILES — réception: profile was auto-created on registration")
     # -----------------------------------------------------------------------
     # When alice registered, Auth should have POSTed her profile to Profiles.
     # Reading with alice's own JWT should return exactly her profile.
@@ -152,7 +204,7 @@ def main():
                      f"(if 401, profiles JWT auth isn't wired; if 200 but empty, réception didn't fire)")
 
     # -----------------------------------------------------------------------
-    section("6. PROFILES — guards: create needs the internal key, not a user JWT")
+    section("7. PROFILES — guards: create needs the internal key, not a user JWT")
     # -----------------------------------------------------------------------
     # A normal user JWT must NOT be allowed to create a profile directly.
     r = safe("post", f"{PROFILES}/", headers=auth_header,
