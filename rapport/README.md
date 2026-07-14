@@ -16,26 +16,29 @@ rapport/
 
 ---
 
-## 1. Remplir la page de garde (2 minutes)
+## 1. Page de garde — déjà remplie
 
-Ouvrir `report.tex` et modifier **uniquement** ce bloc, en haut du fichier :
+Les informations de l'équipe sont renseignées en haut de `report.tex` :
 
 ```latex
-\newcommand{\membreUn}{NOM Prénom}
-\newcommand{\membreDeux}{NOM Prénom}
-\newcommand{\membreTrois}{NOM Prénom}
-\newcommand{\membreQuatre}{NOM Prénom}   % supprimer cette ligne si vous êtes 3
-\newcommand{\filiere}{Filière — à compléter}
+\newcommand{\membreUn}{AMAZIGH Hicham}
+\newcommand{\membreDeux}{BOUDILI Mehdi}
+\newcommand{\membreTrois}{CHIBOUB Abdelaziz}
+\newcommand{\membreQuatre}{SENDID Ahmed}
+\newcommand{\filiere}{Master Informatique, Gouvernance et Transformation Digitale}
 \newcommand{\anneeUniv}{2025 -- 2026}
-\newcommand{\groupe}{Groupe N}
-\newcommand{\encadrant}{Pr. H. EL KHATEB}
-\newcommand{\etablissement}{Établissement — à compléter}
+\newcommand{\groupe}{Groupe 15}
+\newcommand{\encadrant}{Pr. Hamza EL KHATEB}
+\newcommand{\etablissement}{Université Mohammed V --- Faculté des Sciences de Rabat}
+\newcommand{\moduleTitre}{Microservices}
 ```
 
-Tout le reste (page de garde, en-têtes, pieds de page) se met à jour automatiquement.
+C'est le **seul** endroit à modifier si une information change : la page de garde et les
+en-têtes se mettent à jour automatiquement.
 
-> Si vous n'êtes que **trois**, supprimez la ligne `\membreQuatre` **et** la ligne
-> `\membreQuatre\par` dans la page de garde.
+> La page de garde tient sur **une seule page** : elle repasse en interligne simple
+> (`\singlespacing`), sans quoi l'interligne 1,5 du corps du rapport pousserait le nom de
+> l'encadrant sur une deuxième page.
 
 ---
 
