@@ -1,4 +1,4 @@
-%%{init: {'theme':'neutral', 'flowchart': {'curve':'basis', 'nodeSpacing':16, 'rankSpacing':110}}}%%
+%%{init: {'theme':'neutral', 'flowchart': {'curve':'basis', 'nodeSpacing':14, 'rankSpacing':110}}}%%
 flowchart LR
     HOST["<b>HÔTE</b><br/><br/>Ports publiés :<br/><b>8080</b> passerelle<br/><b>15672</b> console RabbitMQ<br/><b>9200</b> Elasticsearch<br/><br/><i>Aucun autre port n'a<br/>besoin d'être exposé</i>"]
 
@@ -17,19 +17,18 @@ flowchart LR
     A10["<b>email-service</b><br/>distroless/java21"]
     A11["<b>search-service</b><br/>distroless/java21"]
 
-    D1[("auth-db<br/>postgres:16")]
-    D2[("users-db<br/>postgres:16")]
-    D3[("tasks-db<br/>postgres:16")]
-    D4[("categories-db<br/>postgres:16")]
-    D5[("comments-db<br/>postgres:16")]
-    D6[("workspaces-db<br/>postgres:16")]
-    D7[("attachments-db<br/>postgres:16")]
-    D8[("notifications-db<br/><b>mysql:8</b>")]
-    D9[("emails-db<br/><b>mysql:8</b>")]
-    RMQ[("rabbitmq<br/>4.3-management")]
-    ESC[("elasticsearch<br/>8.15.3")]
-
-    VOL["<b>Volumes nommés</b><br/>(persistance hors cycle de vie<br/>des conteneurs)<br/><br/>auth_pgdata · users_pgdata<br/>tasks_pgdata · categories_pgdata<br/>comments_pgdata · workspaces_pgdata<br/>attachments_pgdata<br/>notifications_mysqldata<br/>emails_mysqldata<br/>rabbitmq_data · elasticsearch_data"]
+    %% Un conteneur de base + un volume nommé PAR SERVICE. Rien n'est mutualisé.
+    D1[("<b>auth-db</b> · postgres:16<br/><i>vol. auth_pgdata</i>")]
+    D2[("<b>users-db</b> · postgres:16<br/><i>vol. users_pgdata</i>")]
+    D3[("<b>tasks-db</b> · postgres:16<br/><i>vol. tasks_pgdata</i>")]
+    D4[("<b>categories-db</b> · postgres:16<br/><i>vol. categories_pgdata</i>")]
+    D5[("<b>comments-db</b> · postgres:16<br/><i>vol. comments_pgdata</i>")]
+    D6[("<b>workspaces-db</b> · postgres:16<br/><i>vol. workspaces_pgdata</i>")]
+    D7[("<b>attachments-db</b> · postgres:16<br/><i>vol. attachments_pgdata</i>")]
+    D8[("<b>notifications-db</b> · <b>mysql:8</b><br/><i>vol. notifications_mysqldata</i>")]
+    D9[("<b>emails-db</b> · <b>mysql:8</b><br/><i>vol. emails_mysqldata</i>")]
+    RMQ[("<b>rabbitmq</b> · 4.3-management<br/><i>vol. rabbitmq_data</i>")]
+    ESC[("<b>elasticsearch</b> · 8.15.3<br/><i>vol. elasticsearch_data</i>")]
 
     HOST ==> GW
     GW ==> FE & A1 & A2 & A3 & A4 & A5 & A6 & A7 & A8 & A9 & A11
@@ -46,15 +45,15 @@ flowchart LR
     A11 --> ESC
     A1 & A2 & A3 & A4 & A5 & A7 & A8 & A9 & A10 & A11 -.-> RMQ
 
-    D1 & D2 & D3 & D4 & D5 & D6 & D7 & D8 & D9 & RMQ & ESC -.-> VOL
-
     classDef host fill:#fef3c7,stroke:#b45309,color:#78350f,font-weight:bold
     classDef gw fill:#1d4ed8,stroke:#1e3a8a,color:#fff,font-weight:bold
     classDef app fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
-    classDef db fill:#dcfce7,stroke:#15803d,color:#14532d
-    classDef vol fill:#f1f5f9,stroke:#64748b,color:#334155
+    classDef pgdb fill:#dcfce7,stroke:#15803d,color:#14532d
+    classDef mydb fill:#ffedd5,stroke:#c2410c,color:#7c2d12
+    classDef infra fill:#fef3c7,stroke:#b45309,color:#78350f
     class HOST host
     class GW gw
     class FE,A1,A2,A3,A4,A5,A6,A7,A8,A9,A10,A11 app
-    class D1,D2,D3,D4,D5,D6,D7,D8,D9,RMQ,ESC db
-    class VOL vol
+    class D1,D2,D3,D4,D5,D6,D7 pgdb
+    class D8,D9 mydb
+    class RMQ,ESC infra
