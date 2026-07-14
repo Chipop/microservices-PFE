@@ -1,5 +1,8 @@
 # Captures d'écran à réaliser
 
+> ⚠️ **`00-logo_fsr.png` n'est PAS une capture d'écran** — c'est le logo de la Faculté des
+> Sciences de Rabat, affiché en haut de la page de garde. **Ne pas le supprimer.**
+
 Déposer ici les **27 fichiers PNG** listés ci-dessous, en respectant **exactement** ces noms.
 
 Le rapport les inclut automatiquement : la macro `\capture` teste l'existence du fichier.

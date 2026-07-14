@@ -279,13 +279,20 @@
 \singlespacing
 \vspace*{0.2cm}
 
+% Logo de la faculté. \IfFileExists évite de casser la compilation si le
+% fichier venait à manquer : la page de garde se contenterait alors du texte.
+\IfFileExists{screenshots/00-logo_fsr.png}
+  {\includegraphics[width=5.2cm]{screenshots/00-logo_fsr.png}\par
+   \vspace{0.45cm}}
+  {}
+
 {\large\scshape \etablissement\par}
 \vspace{0.25cm}
 {\large\scshape \filiere\par}
 \vspace{0.15cm}
 {\large Année universitaire \anneeUniv\par}
 
-\vspace{1.1cm}
+\vspace{0.85cm}
 
 {\color{ffgray}\rule{\linewidth}{0.4pt}}
 \vspace{0.4cm}
