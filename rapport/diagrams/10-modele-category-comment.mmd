@@ -1,0 +1,66 @@
+%%{init: {'theme':'neutral'}}%%
+classDiagram
+    direction LR
+
+    namespace category-service {
+        class Category["categories"] {
+            +serial id PK
+            +int workspace_id
+            +varchar(200) workspace_name_snapshot
+            +int author_user_id
+            +int owner_user_id
+            +varchar(160) name
+            +text description
+            +timestamptz archived_at
+            +int archived_by_user_id
+            +timestamptz deleted_at
+            +int deleted_by_user_id
+        }
+
+        class CategoryMember["category_members"] {
+            +serial id PK
+            +int category_id
+            +int user_id
+            +enum role
+            +int added_by_user_id
+            +timestamptz removed_at
+            +int removed_by_user_id
+            UNIQUE(category_id, user_id)
+        }
+
+        class CategoryInvitation["category_invitations"] {
+            +serial id PK
+            +int category_id
+            +varchar(254) invited_email
+            +int invited_user_id NULL
+            +enum role
+            +varchar(64) token_hash UNIQUE
+            +enum status
+            +int created_by_user_id
+            +timestamptz expires_at
+            +timestamptz responded_at
+        }
+    }
+
+    namespace comment-service {
+        class Comment["comments"] {
+            +serial id PK
+            +int task_id
+            +int category_id NULL
+            +int workspace_id NULL
+            +int author_user_id
+            +text body
+            +timestamptz deleted_at
+            +int deleted_by_user_id
+            +timestamptz created_at
+            +timestamptz updated_at
+        }
+    }
+
+    Category "1" ..> "0..*" CategoryMember : category_id
+    Category "1" ..> "0..*" CategoryInvitation : category_id
+    Category "1" ..> "0..*" Comment : category_id<br/>(inter-services)
+
+    note for Category "role ∈ CATEGORY_OWNER, CATEGORY_ADMIN,<br/>CONTRIBUTOR, VIEWER.<br/>Les rôles du workspace sont HÉRITÉS :<br/>OWNER→CATEGORY_OWNER, MEMBER→CONTRIBUTOR…"
+    note for CategoryInvitation "status ∈ PENDING, ACCEPTED, REJECTED, EXPIRED.<br/>Seul le haché SHA-256 du jeton est stocké ;<br/>le jeton brut n'est retourné qu'à la création.<br/>TTL par défaut : 168 h (7 jours)."
+    note for Comment "Aucune contrainte FK : task_id, category_id et<br/>workspace_id pointent vers d'AUTRES bases.<br/>La visibilité est vérifiée en appelant<br/>GET /api/tasks/{id}/permissions du task-service."

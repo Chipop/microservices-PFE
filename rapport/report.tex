@@ -1,0 +1,2065 @@
+% =============================================================================
+%  FlowForge — Rapport du Mini-Projet Microservices
+%  Module : Web Avancé & Microservices
+%
+%  COMPILATION : pdfLaTeX (2 passes pour la table des matières).
+%  Sur Overleaf : téléverser tout le dossier `rapport/`, choisir report.tex
+%  comme document principal, compilateur pdfLaTeX. Aucun paquet exotique,
+%  aucun shell-escape.
+%
+%  Les diagrammes sont écrits en Mermaid (diagrams/*.mmd) puis pré-rendus en
+%  PDF vectoriel par ./build-diagrams.sh. Le code source Mermaid de chaque
+%  figure est reproduit en annexe C.
+% =============================================================================
+\documentclass[11pt,a4paper,oneside]{report}
+
+% ---------- Encodage & langue -------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{lmodern}
+\usepackage{textcomp}
+
+% ---------- Mise en page ------------------------------------------------------
+\usepackage[a4paper,top=2.5cm,bottom=2.5cm,left=2.5cm,right=2.5cm]{geometry}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{setspace}
+\onehalfspacing
+
+% ---------- Graphiques, couleurs, tableaux ------------------------------------
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{enumitem}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins,breakable}
+
+% ---------- Code source -------------------------------------------------------
+\usepackage{listings}
+
+% ---------- Liens (à charger en dernier) --------------------------------------
+\usepackage[hidelinks,breaklinks=true]{hyperref}
+
+% =============================================================================
+%  >>> À REMPLIR PAR L'ÉQUIPE — ce sont les SEULES lignes à modifier <<<
+% =============================================================================
+\newcommand{\membreUn}{NOM Prénom}
+\newcommand{\membreDeux}{NOM Prénom}
+\newcommand{\membreTrois}{NOM Prénom}
+\newcommand{\membreQuatre}{NOM Prénom}   % supprimer si l'équipe compte 3 membres
+\newcommand{\filiere}{Filière — à compléter}
+\newcommand{\anneeUniv}{2025 -- 2026}
+\newcommand{\groupe}{Groupe N}
+\newcommand{\encadrant}{Pr. H. EL KHATEB}
+\newcommand{\etablissement}{Établissement — à compléter}
+% =============================================================================
+
+\newcommand{\projet}{FlowForge}
+\newcommand{\soustitre}{Plateforme collaborative de gestion de tâches}
+
+% ---------- Palette -----------------------------------------------------------
+\definecolor{ffblue}{HTML}{1D4ED8}
+\definecolor{ffdark}{HTML}{1E3A8A}
+\definecolor{ffgray}{HTML}{64748B}
+\definecolor{ffbg}{HTML}{F1F5F9}
+\definecolor{ffgreen}{HTML}{15803D}
+\definecolor{fforange}{HTML}{B45309}
+\definecolor{ffred}{HTML}{B91C1C}
+\definecolor{codebg}{HTML}{F8FAFC}
+\definecolor{codekw}{HTML}{1D4ED8}
+\definecolor{codestr}{HTML}{15803D}
+\definecolor{codecom}{HTML}{64748B}
+
+% ---------- En-têtes / pieds de page -----------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textcolor{ffgray}{\projet{} — \soustitre}}
+\fancyhead[R]{\small\textcolor{ffgray}{\leftmark}}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+\fancypagestyle{plain}{\fancyhf{}\fancyfoot[C]{\thepage}\renewcommand{\headrulewidth}{0pt}}
+
+% ---------- Style des titres --------------------------------------------------
+\titleformat{\chapter}[display]
+  {\normalfont\huge\bfseries\color{ffdark}}
+  {\normalsize\color{ffblue}\MakeUppercase{\chaptertitlename}\ \thechapter}
+  {8pt}{\Huge}
+\titlespacing*{\chapter}{0pt}{-20pt}{28pt}
+\titleformat{\section}{\normalfont\Large\bfseries\color{ffdark}}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalfont\large\bfseries\color{ffblue}}{\thesubsection}{1em}{}
+
+% =============================================================================
+%  Styles de code (listings)
+% =============================================================================
+\lstdefinelanguage{TypeScript}{
+  keywords={abstract,as,async,await,break,case,catch,class,const,constructor,continue,
+    declare,default,delete,do,else,enum,export,extends,false,finally,for,from,function,
+    get,if,implements,import,in,instanceof,interface,let,new,null,private,protected,
+    public,readonly,return,set,static,super,switch,this,throw,true,try,type,typeof,
+    undefined,var,void,while,yield},
+  keywordstyle=\color{codekw}\bfseries,
+  ndkeywords={string,number,boolean,any,Promise,Record,Date,Buffer},
+  ndkeywordstyle=\color{fforange},
+  sensitive=true,
+  comment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  commentstyle=\color{codecom}\itshape,
+  stringstyle=\color{codestr},
+  morestring=[b]',
+  morestring=[b]",
+  morestring=[b]`,
+}
+
+\lstdefinelanguage{yaml}{
+  keywords={true,false,null,yes,no,on,off},
+  keywordstyle=\color{fforange},
+  sensitive=false,
+  comment=[l]{\#},
+  commentstyle=\color{codecom}\itshape,
+  morestring=[b]',
+  morestring=[b]",
+  stringstyle=\color{codestr},
+}
+
+% `listings` ne connaît pas JSON nativement : on le déclare.
+\lstdefinelanguage{json}{
+  keywords={true,false,null},
+  keywordstyle=\color{fforange},
+  sensitive=false,
+  comment=[l]{//},
+  commentstyle=\color{codecom}\itshape,
+  morestring=[b]",
+  stringstyle=\color{codestr},
+}
+
+\lstdefinelanguage{nginxconf}{
+  keywords={server,location,upstream,http,events,listen,proxy_pass,proxy_set_header,
+    proxy_http_version,proxy_read_timeout,server_name,return,default_type,
+    client_max_body_size},
+  keywordstyle=\color{codekw}\bfseries,
+  sensitive=true,
+  comment=[l]{\#},
+  commentstyle=\color{codecom}\itshape,
+  morestring=[b]",
+  stringstyle=\color{codestr},
+}
+
+\lstdefinestyle{ffcode}{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{codekw}\bfseries,
+  commentstyle=\color{codecom}\itshape,
+  stringstyle=\color{codestr},
+  numbers=left,
+  numberstyle=\tiny\color{ffgray},
+  numbersep=8pt,
+  frame=leftline,
+  framerule=2pt,
+  rulecolor=\color{ffblue},
+  xleftmargin=14pt,
+  breaklines=true,
+  breakatwhitespace=false,
+  showstringspaces=false,
+  tabsize=2,
+  columns=fullflexible,
+  upquote=true,
+  captionpos=b,
+  extendedchars=true,
+  literate=%
+    {é}{{\'e}}1 {è}{{\`e}}1 {ê}{{\^e}}1 {ë}{{\"e}}1
+    {à}{{\`a}}1 {â}{{\^a}}1 {ä}{{\"a}}1
+    {î}{{\^i}}1 {ï}{{\"i}}1
+    {ô}{{\^o}}1 {ö}{{\"o}}1
+    {ù}{{\`u}}1 {û}{{\^u}}1 {ü}{{\"u}}1
+    {ç}{{\c c}}1
+    {É}{{\'E}}1 {È}{{\`E}}1 {Ê}{{\^E}}1
+    {À}{{\`A}}1 {Ç}{{\c C}}1 {Ô}{{\^O}}1
+    {«}{{\guillemotleft}}1 {»}{{\guillemotright}}1
+    {°}{{\textdegree}}1 {€}{{\texteuro}}1
+    {–}{{--}}1 {—}{{---}}1 {’}{{'}}1 {…}{{\ldots}}1
+    % Symboles présents dans les sources Mermaid reproduites en annexe C
+    {·}{{\textperiodcentered}}1 {•}{{\textbullet}}1
+    {→}{{$\rightarrow$}}1 {←}{{$\leftarrow$}}1 {↓}{{$\downarrow$}}1
+    {∈}{{$\in$}}1 {×}{{$\times$}}1 {≥}{{$\geq$}}1 {≤}{{$\leq$}}1
+}
+\lstset{style=ffcode}
+\renewcommand{\lstlistingname}{Extrait}
+
+% =============================================================================
+%  Macros de présentation
+% =============================================================================
+
+% --- Encadré « point clé » ----------------------------------------------------
+\newtcolorbox{pointcle}[1][]{
+  enhanced, breakable, colback=ffbg, colframe=ffblue,
+  boxrule=0pt, leftrule=3pt, arc=1pt,
+  fonttitle=\bfseries\color{ffdark},
+  coltitle=ffdark, title={#1},
+  left=8pt, right=8pt, top=6pt, bottom=6pt
+}
+
+% --- Encadré « choix d'architecture » ----------------------------------------
+\newtcolorbox{choix}[1][]{
+  enhanced, breakable, colback=white, colframe=ffgreen,
+  boxrule=0pt, leftrule=3pt, arc=1pt,
+  fonttitle=\bfseries\color{ffgreen},
+  coltitle=ffgreen, title={#1},
+  left=8pt, right=8pt, top=6pt, bottom=6pt
+}
+
+% --- Figure Mermaid -----------------------------------------------------------
+% #1 = nom du fichier (sans extension) dans diagrams/
+% #2 = légende  |  #3 = étiquette  |  #4 = largeur relative
+\newcommand{\mermaidfig}[4]{%
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=#4\linewidth]{diagrams/#1.pdf}
+    \caption{#2}
+    \label{fig:#3}
+  \end{figure}%
+}
+
+% --- Emplacement de capture d'écran ------------------------------------------
+% Si le fichier screenshots/<nom>.png existe, il est inclus automatiquement.
+% Sinon, un cadre « à insérer » est affiché à sa place.
+\newcommand{\phbox}[1]{%
+  \setlength{\fboxsep}{0pt}%
+  \fcolorbox{ffblue}{ffbg}{%
+    \begin{minipage}[c][52mm][c]{\linewidth}
+      \centering
+      {\bfseries\large\color{ffblue} CAPTURE D'ÉCRAN À INSÉRER}\\[3mm]
+      {\ttfamily\small\color{ffdark} rapport/screenshots/#1.png}\\[3mm]
+      {\small\itshape\color{ffgray} Déposer le fichier à cet emplacement :\\
+       il sera inclus automatiquement à la prochaine compilation.}
+    \end{minipage}%
+  }%
+}
+\newcommand{\capture}[3]{%
+  \begin{figure}[H]
+    \centering
+    \IfFileExists{screenshots/#1.png}
+      {\fbox{\includegraphics[width=\linewidth]{screenshots/#1.png}}}
+      {\phbox{#1}}
+    \caption{#2}
+    \label{fig:cap-#3}
+  \end{figure}%
+}
+
+\newcommand{\code}[1]{\texttt{\small #1}}
+
+% =============================================================================
+\begin{document}
+\sloppy
+
+% =============================================================================
+%  PAGE DE GARDE
+% =============================================================================
+\begin{titlepage}
+\centering
+\vspace*{0.5cm}
+
+{\large\scshape \etablissement\par}
+\vspace{0.3cm}
+{\large\scshape \filiere\par}
+\vspace{0.2cm}
+{\large Année universitaire \anneeUniv\par}
+
+\vspace{1.6cm}
+
+{\color{ffgray}\rule{\linewidth}{0.4pt}}
+\vspace{0.5cm}
+
+{\small\bfseries\color{ffblue}\MakeUppercase{Module — Web Avancé \& Microservices}\par}
+\vspace{0.4cm}
+
+{\Huge\bfseries\color{ffdark} Mini-Projet Microservices\par}
+\vspace{0.7cm}
+
+{\huge\bfseries\color{ffblue} \projet\par}
+\vspace{0.35cm}
+{\Large\itshape \soustitre\par}
+
+\vspace{0.5cm}
+{\color{ffgray}\rule{\linewidth}{0.4pt}}
+
+\vspace{1.2cm}
+
+\begin{tcolorbox}[width=0.95\linewidth, colback=ffbg, colframe=ffblue,
+                  boxrule=0.6pt, arc=2pt, left=10pt, right=10pt, top=10pt, bottom=10pt]
+\centering
+{\bfseries\large\color{ffdark} Architecture réalisée\par}
+\vspace{3mm}
+{\normalsize
+11 microservices conteneurisés \quad\textbullet\quad 3 technologies backend\\
+3 SGBD (PostgreSQL, MySQL, Elasticsearch) \quad\textbullet\quad Bus d'événements RabbitMQ\\
+Passerelle API NGINX \quad\textbullet\quad Frontend SPA Vue 3\par}
+\end{tcolorbox}
+
+\vfill
+
+{\large\bfseries Réalisé par :\par}
+\vspace{0.4cm}
+{\large
+\membreUn\\[2mm]
+\membreDeux\\[2mm]
+\membreTrois\\[2mm]
+\membreQuatre\par}
+
+\vspace{0.8cm}
+{\large \groupe\par}
+
+\vspace{0.8cm}
+{\large\bfseries Encadré par :\par}
+{\large \encadrant\par}
+
+\vspace{1cm}
+\end{titlepage}
+
+% =============================================================================
+\tableofcontents
+\listoffigures
+\cleardoublepage
+
+% =============================================================================
+\chapter{Introduction}
+% =============================================================================
+
+\section{Contexte du projet}
+
+Ce rapport présente \projet, une plateforme collaborative de gestion de tâches
+développée dans le cadre du module \emph{Web Avancé \& Microservices}. Le sujet
+demandait de concevoir une plateforme permettant à des utilisateurs de
+s'inscrire, de gérer leurs tâches, de les organiser par catégories, de les
+commenter et de consulter des statistiques de productivité, le tout accessible
+via un frontend et une passerelle API centralisée.
+
+Nous avons choisi de traiter ce sujet non pas comme un simple exercice de
+découpage en six services, mais comme la construction d'un système réellement
+distribué : chaque service possède sa propre base, communique avec les autres
+soit par API HTTP soit par un bus d'événements asynchrone, et reste déployable
+et redémarrable indépendamment.
+
+\begin{pointcle}[Ce qui distingue ce projet]
+Au-delà des six microservices exigés, la plateforme intègre un
+\textbf{bus d'événements RabbitMQ} (exchange topic, files durables,
+\emph{dead-letter queues} et réessais), un \textbf{moteur de recherche
+Elasticsearch} alimenté par événements avec filtrage des droits poussé dans le
+moteur, un \textbf{service d'emailing} idempotent, un service de
+\textbf{pièces jointes} adossé à un stockage objet, et des
+\textbf{notifications temps réel par WebSocket}. Ces éléments font l'objet du
+chapitre~\ref{chap:extras}.
+\end{pointcle}
+
+\section{Objectifs}
+
+\begin{itemize}[leftmargin=*]
+  \item Concevoir une architecture microservices cohérente, où le découpage
+        suit les \emph{frontières métier} et non des considérations techniques.
+  \item Garantir l'\textbf{indépendance des données} : une base dédiée par
+        service, aucune lecture croisée.
+  \item Mettre en place une \textbf{authentification sans état} (JWT) validée
+        localement par chaque service.
+  \item Exposer un \textbf{point d'entrée unique} (NGINX) servant à la fois la
+        SPA et le \emph{reverse proxy} de chaque service.
+  \item Démontrer la maîtrise de \textbf{plusieurs écosystèmes} : Python,
+        TypeScript et Java coexistent derrière un contrat d'API et
+        d'événements commun.
+  \item Assurer la \textbf{résilience} des traitements asynchrones (réessais,
+        files de rebut, idempotence).
+\end{itemize}
+
+\section{Périmètre fonctionnel}
+
+\begin{longtable}{@{}p{4.2cm}p{10.3cm}@{}}
+\caption{Périmètre fonctionnel couvert}\label{tab:perimetre}\\
+\toprule
+\textbf{Domaine} & \textbf{Fonctionnalités couvertes} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Domaine} & \textbf{Fonctionnalités couvertes} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Authentification &
+  Inscription, connexion, JWT (accès + rafraîchissement), déconnexion globale,
+  réinitialisation de mot de passe, vérification d'email, double authentification
+  (TOTP), gestion et révocation des sessions, verrouillage après échecs répétés. \\
+\addlinespace
+Profils &
+  Consultation et mise à jour du profil, photo de profil (validation de type et
+  de taille), biographie, fuseau horaire, langue, préférences libres. \\
+\addlinespace
+Tâches (TODO) &
+  CRUD complet, priorité, statut, date d'échéance, sous-tâches, étiquettes,
+  assignations multiples, dépendances entre tâches, récurrence, rappels,
+  colonnes kanban, filtres enregistrés, journal d'activité. \\
+\addlinespace
+Catégories &
+  CRUD, membres et rôles propres à la catégorie, invitations par jeton à usage
+  unique, archivage, suppression logique. \\
+\addlinespace
+Commentaires &
+  Ajout, consultation, modification et suppression logique des commentaires,
+  avec contrôle de visibilité délégué au service des tâches. \\
+\addlinespace
+Statistiques &
+  Taux de complétion, totaux, répartition par statut / catégorie / priorité,
+  tendance de complétion sur les derniers jours, filtres combinables. \\
+\addlinespace
+Notifications \newline (\emph{bonus}) &
+  Notifications in-app persistées, poussées en temps réel par WebSocket,
+  détection des échéances proches (moins de 24~h) par tâche planifiée,
+  compteur de non-lues, marquage lu / tout lu, suppression. \\
+\end{longtable}
+
+\section{Périmètre technique et correspondance avec le cahier des charges}
+
+Le sujet imposait six microservices, plus un septième optionnel valorisé en
+bonus. Le tableau~\ref{tab:mapping} établit la correspondance exacte entre les
+services demandés et ceux que nous avons livrés.
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\linewidth}{@{}p{0.5cm}p{3.4cm}p{3.5cm}X@{}}
+\toprule
+\textbf{\#} & \textbf{Service demandé} & \textbf{Service livré} & \textbf{Technologie / base} \\
+\midrule
+1 & Auth-Service       & \code{auth-service}       & Django 5.2 + DRF \textbullet{} PostgreSQL \code{auth} \\
+2 & User-Service       & \code{user-service}       & Django 5.2 + DRF \textbullet{} PostgreSQL \code{users} \\
+3 & TODO-Service       & \code{task-service}       & NestJS 11 + TypeORM \textbullet{} PostgreSQL \code{tasks} \\
+4 & Category-Service   & \code{category-service}   & NestJS 11 + TypeORM \textbullet{} PostgreSQL \code{categories} \\
+5 & Comment-Service    & \code{comment-service}    & NestJS 11 + TypeORM \textbullet{} PostgreSQL \code{comments} \\
+6 & Statistics-Service & \code{statistics-service} & NestJS 11 \textbullet{} \emph{sans état, aucune base} \\
+\midrule
+\textbf{B} & \textbf{Notification-Service} \newline \emph{(bonus)} & \code{notification-service} & Spring Boot 3.4 + WebSocket \textbullet{} MySQL \code{notifications} \\
+\bottomrule
+\end{tabularx}
+\caption{Correspondance entre les services exigés et les services livrés}
+\label{tab:mapping}
+\end{table}
+
+À ces sept services s'ajoutent quatre services supplémentaires, non demandés,
+présentés au chapitre~\ref{chap:extras} : \code{workspace-service},
+\code{attachment-service}, \code{email-service} et \code{search-service}.
+
+\subsection{Respect des contraintes techniques obligatoires}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\linewidth}{@{}p{5.6cm}p{1.1cm}X@{}}
+\toprule
+\textbf{Contrainte} & \textbf{État} & \textbf{Réalisation} \\
+\midrule
+Minimum 2 technologies différentes & \textbf{Oui} &
+  \textbf{3} technologies : Python/Django, TypeScript/NestJS, Java/Spring Boot. \\
+\addlinespace
+Au moins un service par technologie & \textbf{Oui} &
+  2 services Django, 4 services NestJS, 5 services Spring Boot. \\
+\addlinespace
+Minimum 2 SGBD différents & \textbf{Oui} &
+  \textbf{3} SGBD : PostgreSQL 16, MySQL 8, Elasticsearch 8.15. \\
+\addlinespace
+Base dédiée par service & \textbf{Oui} &
+  9 bases dans 9 conteneurs distincts. Aucun service ne lit la base d'un autre. \\
+\addlinespace
+Frontend obligatoire & \textbf{Oui} &
+  SPA Vue 3 + TypeScript + Vite (framework libre). \\
+\addlinespace
+Frontend via la passerelle uniquement & \textbf{Oui} &
+  Le conteneur \code{frontend} ne publie aucun port : il n'est joignable que
+  par NGINX. \\
+\addlinespace
+Frontend servi depuis la racine \code{/} & \textbf{Oui} &
+  \code{location / \{ proxy\_pass http://frontend\_app; \}} (annexe~\ref{ann:nginx}). \\
+\addlinespace
+Tous les services conteneurisés & \textbf{Oui} &
+  19 conteneurs orchestrés par un unique \code{docker-compose.yml}. \\
+\addlinespace
+Reverse proxy pour chaque service & \textbf{Oui} &
+  Un bloc \code{location} par microservice backend. \\
+\bottomrule
+\end{tabularx}
+\caption{Conformité aux contraintes techniques obligatoires}
+\end{table}
+
+\section{Architecture retenue}
+
+Trois décisions structurent l'ensemble du système.
+
+\begin{choix}[1. Une base de données par service, sans exception]
+Chaque microservice possède sa propre base, dans son propre conteneur. Aucune
+jointure SQL n'existe entre deux domaines : les références inter-services
+(\code{task\_id}, \code{workspace\_id}, \code{author\_user\_id}\ldots) sont de
+simples entiers, sans contrainte de clé étrangère, puisqu'ils désignent des
+lignes situées dans une \emph{autre} base. Le coût est réel — il faut résoudre
+ces liens par API ou par événement — mais le bénéfice l'est aussi : un service
+peut migrer son schéma, voire changer de SGBD, sans coordination avec les
+autres. C'est exactement ce qui nous a permis de basculer les services
+\code{notification} et \code{email} sur MySQL sans toucher au reste.
+\end{choix}
+
+\begin{choix}[2. Authentification sans état par JWT à secret partagé]
+L'\code{auth-service} est le seul émetteur de jetons. Il les signe en HS256
+avec un secret (\code{JWT\_SIGNING\_KEY}) partagé par tous les services. Chaque
+service valide donc le jeton \emph{localement}, sans appel réseau vers
+l'auth-service : il n'y a ni goulot d'étranglement, ni point de défaillance
+unique sur le chemin d'authentification. La revendication \code{user\_id}
+suffit à identifier l'appelant.
+\end{choix}
+
+\begin{choix}[3. Communication synchrone pour les décisions, asynchrone pour les effets]
+Quand un service a besoin d'une réponse \emph{avant} de pouvoir agir — par
+exemple : « cet utilisateur a-t-il le droit de commenter cette tâche ? » — il
+fait un appel HTTP direct et attend. En revanche, tout ce qui est un
+\emph{effet de bord} — indexer la tâche dans Elasticsearch, notifier l'assigné,
+envoyer un email de bienvenue — passe par RabbitMQ. Le producteur n'attend pas,
+n'a pas besoin de savoir qui consomme, et l'ajout d'un nouveau consommateur ne
+modifie aucune ligne de code chez lui.
+\end{choix}
+
+% =============================================================================
+\chapter{Schéma de l'architecture globale}
+\label{chap:archi}
+% =============================================================================
+
+\section{Vue d'ensemble}
+
+La figure~\ref{fig:archi} présente l'architecture complète : le frontend, la
+passerelle NGINX, les onze microservices, les trois SGBD et les flux de
+communication (synchrones en trait plein, asynchrones en pointillés).
+
+\mermaidfig{01-architecture-globale}{Architecture globale de la plateforme \projet}{archi}{1.0}
+
+Le navigateur ne connaît qu'une seule adresse : \code{http://localhost:8080}.
+NGINX y sert la SPA depuis la racine et relaie chaque préfixe \code{/api/...}
+vers le microservice compétent. Aucun service backend n'est joignable
+directement depuis l'extérieur du réseau Docker.
+
+\section{Routage de la passerelle}
+
+\mermaidfig{02-routage-nginx}{Table de routage de la passerelle NGINX}{routage}{1.0}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\linewidth}{@{}p{3.9cm}p{3.9cm}X@{}}
+\toprule
+\textbf{Préfixe} & \textbf{Service cible} & \textbf{Rôle} \\
+\midrule
+\code{/} & \code{frontend:9000} & SPA Vue 3 (fallback \code{index.html}) \\
+\code{/api/auth/} & \code{auth-service} & Inscription, connexion, JWT, sessions \\
+\code{/api/profiles/} & \code{user-service} & Profils utilisateurs \\
+\code{/api/tasks/} & \code{task-service} & Tâches et métadonnées \\
+\code{/api/categories/} & \code{category-service} & Catégories, membres, invitations \\
+\code{/api/comments/} & \code{comment-service} & Commentaires \\
+\code{/api/statistics/} & \code{statistics-service} & Métriques de productivité \\
+\code{/api/workspaces/} & \code{workspace-service} & Espaces de travail \\
+\code{/api/attachments/} & \code{attachment-service} & Pièces jointes \\
+\code{/api/notifications/} & \code{notification-service} & Notifications in-app \\
+\code{/ws/notifications} & \code{notification-service} & Socket temps réel (\emph{Upgrade}) \\
+\code{/api/search/} & \code{search-service} & Recherche globale \\
+\bottomrule
+\end{tabularx}
+\caption{Routage par préfixe d'URL}
+\end{table}
+
+\begin{pointcle}[Le cas particulier du WebSocket]
+NGINX ne relaie pas par défaut l'en-tête \code{Upgrade}. Sans les deux lignes
+\code{proxy\_set\_header Upgrade \$http\_upgrade;} et
+\code{proxy\_set\_header Connection "upgrade";}, la négociation WebSocket
+échoue silencieusement. Le \code{proxy\_read\_timeout} est par ailleurs porté à
+une heure, faute de quoi NGINX fermerait la socket après 60~secondes
+d'inactivité — alors qu'une session de notification reste ouverte tant que
+l'onglet l'est.
+\end{pointcle}
+
+\section{Topologie des conteneurs}
+
+\mermaidfig{03-topologie-docker}{Topologie Docker Compose : conteneurs, images, volumes}{docker}{1.0}
+
+L'ensemble tient dans un seul réseau \emph{bridge}
+(\code{flowforge-platform-network}). Les conteneurs se résolvent entre eux par
+leur nom de service grâce au DNS embarqué de Docker : \code{task-service}
+contacte \code{http://category-service:8000} sans jamais connaître d'adresse IP.
+Chaque base est adossée à un volume nommé, si bien que les données survivent à
+un \code{docker compose down}.
+
+\section{Flux de communication}
+
+\subsection{Inscription : une chaîne de provisionnement asynchrone}
+
+L'inscription illustre le mieux le fonctionnement du bus. L'\code{auth-service}
+se contente de créer le compte et de publier un unique événement
+\code{user.registered}. Trois services réagissent \emph{indépendamment} : le
+profil est créé, l'espace de travail personnel est provisionné, l'email de
+bienvenue est envoyé.
+
+\mermaidfig{04-sequence-inscription}{Séquence d'inscription et de provisionnement asynchrone}{seq-inscription}{0.95}
+
+\begin{pointcle}[Publication après validation de la transaction]
+L'événement est publié dans un \code{transaction.on\_commit()} : si
+l'insertion en base échoue et que la transaction est annulée, \emph{aucun}
+événement n'est émis. On ne notifie jamais la création d'un utilisateur qui
+n'existe pas. C'est une garantie simple mais essentielle à la cohérence du
+système.
+\end{pointcle}
+
+\subsection{Cycle de vie d'une tâche}
+
+\mermaidfig{05-sequence-tache}{Création, indexation et assignation d'une tâche}{seq-tache}{0.95}
+
+\subsection{Bus d'événements}
+
+\mermaidfig{06-bus-evenements}{Bus d'événements RabbitMQ : producteurs, exchange topic, files et rebut}{bus}{1.0}
+
+% =============================================================================
+\chapter{Code source des backends}
+\label{chap:backends}
+% =============================================================================
+
+Ce chapitre documente les sept services du périmètre exigé (les six services
+demandés et le service de notification, en bonus). Pour chacun : la pile
+technique, la structure du projet, le modèle de données, les points d'entrée
+exposés et un extrait de code commenté représentatif.
+
+\section{Vue d'ensemble des piles techniques}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\linewidth}{@{}p{3.4cm}p{3.3cm}p{2.4cm}X@{}}
+\toprule
+\textbf{Service} & \textbf{Pile} & \textbf{Port} & \textbf{Persistance} \\
+\midrule
+\code{auth-service}         & Django 5.2 + DRF       & 8002 & PostgreSQL \code{auth} \\
+\code{user-service}         & Django 5.2 + DRF       & 8001 & PostgreSQL \code{users} \\
+\code{task-service}         & NestJS 11 + TypeORM    & 8003 & PostgreSQL \code{tasks} \\
+\code{category-service}     & NestJS 11 + TypeORM    & 8009 & PostgreSQL \code{categories} \\
+\code{comment-service}      & NestJS 11 + TypeORM    & 8010 & PostgreSQL \code{comments} \\
+\code{statistics-service}   & NestJS 11              & 8011 & \emph{aucune} \\
+\code{notification-service} & Spring Boot 3.4 / Java 21 & 8006 & MySQL \code{notifications} \\
+\bottomrule
+\end{tabularx}
+\caption{Piles techniques des services du périmètre exigé}
+\end{table}
+
+% -----------------------------------------------------------------------------
+\section{Auth-Service}
+% -----------------------------------------------------------------------------
+
+\subsection{Rôle}
+
+L'\code{auth-service} est la racine de confiance de la plateforme. Il possède
+les comptes, les mots de passe et les sessions ; il est le \emph{seul} émetteur
+de JWT. Aucun autre service ne stocke de mot de passe, et aucun autre service
+n'a besoin de l'appeler pour valider un jeton.
+
+\subsection{Pile technique}
+
+Django~5.2 avec Django REST Framework et \emph{SimpleJWT}. Le choix de Django se
+justifie ici par son système d'authentification éprouvé : hachage PBKDF2,
+gestion des permissions et surtout un modèle utilisateur extensible, que nous
+avons enrichi pour la 2FA et le verrouillage de compte.
+
+\subsection{Structure du projet}
+
+\begin{lstlisting}[language=bash,numbers=none]
+server/auth-service/
+  auth_django/            # configuration du projet Django
+    settings.py           #   BD, SimpleJWT, ALLOWED_HOSTS
+    cors.py               #   middleware CORS ecrit a la main
+  auth_app/
+    models.py             #   User, AuthSession, AuthToken, LoginAttempt
+    serializers.py        #   validation des entrees (DRF)
+    services.py           #   logique metier : login, 2FA, jetons
+    views.py              #   points d'entree HTTP
+    events.py             #   publication RabbitMQ
+    migrations/
+  Dockerfile
+\end{lstlisting}
+
+\subsection{Modèle de données}
+
+\mermaidfig{08-modele-auth-user}{Modèle de données des services Auth et User}{modele-auth}{0.85}
+
+Quatre tables. \code{auth\_app\_user} étend \code{AbstractUser} de Django et
+ajoute la vérification d'email, le compteur d'échecs, le verrouillage temporaire
+et les deux colonnes de 2FA. \code{auth\_app\_authsession} matérialise chaque
+jeton de rafraîchissement émis (ce qui permet de lister et révoquer les sessions
+une à une). \code{auth\_app\_authtoken} porte, dans une table unique
+discriminée par \code{purpose}, les jetons de vérification d'email, de
+réinitialisation de mot de passe et d'activation. \code{auth\_app\_loginattempt}
+journalise chaque tentative de connexion.
+
+\begin{pointcle}[Les jetons ne sont jamais stockés en clair]
+\code{AuthToken} ne conserve que le \textbf{haché SHA-256} du jeton
+(\code{token\_hash}, unique). Le jeton brut n'est retourné qu'une seule fois, à
+l'émission. Une fuite de la base ne permettrait donc pas de réinitialiser le mot
+de passe d'un utilisateur. Le même principe est appliqué aux invitations
+(catégories et espaces de travail).
+\end{pointcle}
+
+\subsection{Points d'entrée exposés}
+
+\begin{longtable}{@{}p{1.4cm}p{6.1cm}p{1.3cm}p{5.1cm}@{}}
+\caption{Points d'entrée de l'Auth-Service}\label{tab:ep-auth}\\
+\toprule
+\textbf{Méth.} & \textbf{Chemin} & \textbf{Auth} & \textbf{Rôle} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Méth.} & \textbf{Chemin} & \textbf{Auth} & \textbf{Rôle} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+POST & \code{/api/auth/register/} & Non & Crée le compte, publie \code{user.registered} \\
+POST & \code{/api/auth/login/} & Non & Retourne \code{\{access, refresh\}} ou exige un code 2FA \\
+POST & \code{/api/auth/refresh/} & Non & Renouvelle le jeton d'accès \\
+POST & \code{/api/auth/logout/} & Oui & Révoque une session \\
+POST & \code{/api/auth/logout-all/} & Oui & Révoque toutes les sessions \\
+POST & \code{/api/auth/password/change/} & Oui & Change le mot de passe et déconnecte partout \\
+POST & \code{/api/auth/password/forgot/} & Non & Émet un jeton de réinitialisation \\
+POST & \code{/api/auth/password/reset/confirm/} & Non & Applique le nouveau mot de passe \\
+POST & \code{/api/auth/email/verify/request/} & Oui & Émet un jeton de vérification \\
+POST & \code{/api/auth/email/verify/confirm/} & Non & Marque l'email comme vérifié \\
+POST & \code{/api/auth/2fa/setup/} & Oui & Retourne le secret TOTP et l'URL \emph{otpauth} \\
+POST & \code{/api/auth/2fa/confirm/} & Oui & Active la double authentification \\
+POST & \code{/api/auth/2fa/disable/} & Oui & Désactive la double authentification \\
+GET & \code{/api/auth/sessions/} & Oui & Liste les sessions actives \\
+DELETE & \code{/api/auth/sessions/\{id\}/} & Oui & Révoque une session précise \\
+\end{longtable}
+
+\subsection{Extrait commenté — émission des jetons}
+
+Chaque jeton de rafraîchissement est \emph{matérialisé} en base sous forme de
+session. C'est ce qui permet à l'utilisateur de voir la liste de ses appareils
+connectés et d'en révoquer un individuellement — ce qu'un JWT, sans état par
+nature, ne permettrait pas seul.
+
+\begin{lstlisting}[language=Python, caption={\code{auth\_app/services.py} — émission d'un couple de jetons et création de la session}]
+def issue_auth_tokens(user, request):
+    # SimpleJWT genere le couple acces/rafraichissement, signe en HS256
+    # avec JWT_SIGNING_KEY -- le secret partage par TOUS les services.
+    refresh = RefreshToken.for_user(user)
+
+    expires_at = timezone.datetime.fromtimestamp(
+        int(refresh["exp"]), tz=timezone.get_current_timezone()
+    )
+
+    # On MATERIALISE le jeton de rafraichissement en base. Le JWT reste sans
+    # etat pour la validation (aucun appel reseau), mais on garde une trace
+    # cote serveur pour pouvoir REVOQUER une session precise : c'est ce qui
+    # alimente l'ecran "Sessions actives" et le bouton "Deconnecter partout".
+    session = AuthSession.objects.create(
+        user=user,
+        refresh_jti=str(refresh["jti"]),   # identifiant unique du jeton
+        ip_address=client_ip(request),
+        user_agent=user_agent(request),
+        expires_at=expires_at,
+    )
+
+    # On injecte l'id de session DANS le jeton : au rafraichissement, on peut
+    # ainsi verifier que la session n'a pas ete revoquee entre-temps.
+    refresh["session_id"] = session.id
+    access = refresh.access_token
+
+    return {
+        "access": str(access),
+        "refresh": str(refresh),
+        "session_id": session.id,
+    }
+\end{lstlisting}
+
+\subsection{Extrait commenté — publication d'événement}
+
+\begin{lstlisting}[language=Python, caption={\code{auth\_app/events.py} — publication transactionnelle sur RabbitMQ}]
+EXCHANGE_NAME = os.environ.get("RABBITMQ_EXCHANGE", "flowforge.events")
+PRODUCER = "auth-service"
+
+def publish_domain_event(event_type, resource_type, resource_id,
+                         actor_user_id=None, data=None):
+    # Enveloppe COMMUNE a tous les services, quel que soit le langage.
+    # C'est ce contrat unique qui permet a un consommateur Java de lire
+    # sans effort un evenement emis par un producteur Python.
+    payload = {
+        "eventId": str(uuid.uuid4()),
+        "eventType": event_type,              # sert AUSSI de routing key
+        "occurredAt": timezone.now().isoformat(),
+        "producer": PRODUCER,
+        "actorUserId": actor_user_id,
+        "resource": {"type": resource_type, "id": resource_id},
+        "data": data or {},
+    }
+
+    def _publish():
+        rabbitmq_url = os.environ.get("RABBITMQ_URL")
+        if not rabbitmq_url:
+            return  # environnement sans bus (tests) : on n'echoue pas
+
+        try:
+            connection = pika.BlockingConnection(pika.URLParameters(rabbitmq_url))
+            channel = connection.channel()
+            # Idempotent : declarer un exchange deja existant ne fait rien.
+            channel.exchange_declare(exchange=EXCHANGE_NAME,
+                                     exchange_type="topic", durable=True)
+            channel.basic_publish(
+                exchange=EXCHANGE_NAME,
+                routing_key=event_type,
+                body=json.dumps(payload, default=str).encode("utf-8"),
+                properties=pika.BasicProperties(
+                    content_type="application/json",
+                    delivery_mode=2,          # message PERSISTANT sur disque
+                ),
+            )
+            connection.close()
+        except Exception:
+            # Publication "au mieux" : si le bus est indisponible, la requete
+            # HTTP de l'utilisateur reussit quand meme. On degrade l'effet de
+            # bord, jamais l'action principale.
+            logger.exception("Failed to publish domain event %s", event_type)
+
+    # >>> LE POINT ESSENTIEL <<<
+    # On ne publie qu'APRES la validation de la transaction. Si l'INSERT est
+    # annule, aucun evenement ne part : on ne signale jamais la creation d'un
+    # utilisateur qui n'existe pas en base.
+    transaction.on_commit(_publish)
+\end{lstlisting}
+
+% -----------------------------------------------------------------------------
+\section{User-Service}
+% -----------------------------------------------------------------------------
+
+\subsection{Rôle}
+
+Le \code{user-service} détient les \emph{métadonnées} de profil : nom affiché,
+biographie, photo, fuseau horaire, langue, préférences. Il ne connaît ni les
+mots de passe ni les sessions — cette séparation est volontaire : le service le
+plus exposé fonctionnellement (celui qu'on modifie le plus souvent) est aussi
+celui qui manipule le moins de données sensibles.
+
+\subsection{Particularité : provisionnement automatique par événement}
+
+Le profil n'est pas créé par un appel HTTP depuis l'auth-service : il est créé
+par la \emph{consommation} de l'événement \code{user.registered}. Le
+consommateur tourne comme un processus d'arrière-plan à côté du serveur HTTP,
+lancé par le point d'entrée du conteneur.
+
+\begin{lstlisting}[language=bash, caption={\code{entrypoint.sh} — le serveur HTTP et le consommateur d'événements dans le même conteneur}]
+#!/bin/sh
+set -e
+python manage.py migrate --noinput
+
+# Le consommateur RabbitMQ tourne en TACHE DE FOND...
+python manage.py consume_events &
+
+# ...pendant que le serveur HTTP occupe le processus principal.
+exec python manage.py runserver 0.0.0.0:8000
+\end{lstlisting}
+
+\begin{lstlisting}[language=Python, caption={\code{profiles/management/commands/consume\_events.py} — déclaration de la topologie et du rebut}]
+# Le consommateur declare LUI-MEME toute la topologie dont il depend.
+# Il peut donc demarrer avant, apres, ou sans le producteur : l'ordre de
+# demarrage des conteneurs n'a aucune importance.
+channel.exchange_declare(exchange=exchange, exchange_type="topic", durable=True)
+
+# Exchange de rebut (dead-letter) : y atterrissent les messages definitivement
+# en echec, au lieu d'etre perdus ou rejoues indefiniment.
+channel.exchange_declare(exchange=dlx, exchange_type="direct", durable=True)
+
+channel.queue_declare(queue=queue, durable=True, arguments={
+    "x-dead-letter-exchange": dlx,
+    "x-dead-letter-routing-key": dlq_routing_key,
+})
+channel.queue_declare(queue=dlq, durable=True)
+
+# On ne s'abonne QU'A la cle qui nous concerne. Les centaines d'autres
+# evenements qui transitent par l'exchange ne nous sont jamais livres.
+channel.queue_bind(queue=queue, exchange=exchange, routing_key="user.registered")
+
+# Un seul message non acquitte a la fois : on ne prefetch pas un lot que
+# l'on serait incapable de traiter en cas de redemarrage.
+channel.basic_qos(prefetch_count=1)
+\end{lstlisting}
+
+\subsection{Points d'entrée exposés}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\linewidth}{@{}p{1.5cm}p{5.4cm}p{1.2cm}X@{}}
+\toprule
+\textbf{Méth.} & \textbf{Chemin} & \textbf{Auth} & \textbf{Rôle} \\
+\midrule
+GET & \code{/api/profiles/} & Oui & Profil de l'utilisateur courant \\
+PATCH & \code{/api/profiles/\{id\}/} & Oui & Mise à jour du profil \\
+GET & \code{/api/profiles/public/\{username\}/} & Non & Profil public \\
+POST & \code{/api/profiles/picture/} & Oui & Téléversement de la photo \\
+PUT & \code{/api/profiles/picture/} & Oui & Remplacement de la photo \\
+DELETE & \code{/api/profiles/picture/} & Oui & Suppression de la photo \\
+\bottomrule
+\end{tabularx}
+\caption{Points d'entrée du User-Service}
+\end{table}
+
+La photo de profil est validée côté serveur (types \code{image/jpeg},
+\code{image/png}, \code{image/webp} ; 2~Mo maximum) puis déposée dans un
+stockage objet Azure Blob. La base ne contient que la \emph{clé} de l'objet et
+ses métadonnées : elle ne grossit pas avec le volume des images.
+
+% -----------------------------------------------------------------------------
+\section{TODO-Service (task-service)}
+% -----------------------------------------------------------------------------
+
+\subsection{Rôle}
+
+C'est le cœur métier de la plateforme. Il possède les tâches et tout ce qui
+gravite autour : sous-tâches, étiquettes, assignations, dépendances, récurrence,
+rappels, colonnes kanban, filtres enregistrés et journal d'activité.
+
+\subsection{Pile technique}
+
+NestJS~11 avec TypeORM. NestJS apporte une structure modulaire explicite
+(modules, contrôleurs, services, \emph{guards}, \emph{pipes}) et une validation
+déclarative des entrées via \code{class-validator}, activée globalement :
+
+\begin{lstlisting}[language=TypeScript, caption={\code{src/main.ts} — validation stricte des entrées}]
+app.useGlobalPipes(new ValidationPipe({
+  whitelist: true,            // supprime les proprietes non declarees dans le DTO
+  forbidNonWhitelisted: true, // ...et REJETTE la requete (400) si elle en contient
+  transform: true,            // convertit les types (ex. "3" -> 3)
+}));
+\end{lstlisting}
+
+\code{forbidNonWhitelisted} est un choix de sécurité : un client qui tenterait
+d'injecter un champ non prévu (\code{"owner\_user\_id": 1}) reçoit une erreur
+400 au lieu de voir son champ silencieusement ignoré.
+
+\subsection{Modèle de données}
+
+\mermaidfig{09-modele-task}{Modèle de données du TODO-Service (11 entités)}{modele-task}{1.0}
+
+\begin{choix}[Le statut : d'une table de jointure à un type énuméré natif]
+Dans une première version, le statut d'une tâche était une clé étrangère vers
+une table \code{task\_statuses} configurable par utilisateur. Nous l'avons
+\textbf{dénormalisé} en un type énuméré natif PostgreSQL
+(\code{backlog}, \code{todo}, \code{in\_progress}, \code{review}, \code{done},
+\code{archived}). Motif : la flexibilité offerte n'était jamais utilisée, alors
+qu'elle imposait une jointure sur \emph{chaque} lecture de tâche et rendait
+impossible tout filtrage efficace par statut. Les colonnes
+\code{completed\_at} et \code{archived\_at} sont désormais \emph{dérivées} du
+statut, ce qui supprime une classe entière d'incohérences (une tâche marquée
+« terminée » sans date de complétion, par exemple).
+\end{choix}
+
+\begin{lstlisting}[language=SQL, caption={\code{src/migrations/…-DirectTaskStatusAndActivity.ts} — migration de dénormalisation}]
+-- 1. Creation du type enumere natif
+CREATE TYPE tasks_status_enum AS ENUM
+  ('backlog','todo','in_progress','review','done','archived');
+
+-- 2. Ajout de la colonne, avec une valeur par defaut sure
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS
+  status tasks_status_enum NOT NULL DEFAULT 'todo';
+
+-- 3. Reprise des donnees existantes depuis l'ancienne table (non montre),
+--    PUIS seulement suppression de l'ancien schema.
+ALTER TABLE tasks DROP COLUMN IF EXISTS status_id;
+DROP TABLE IF EXISTS task_statuses;
+
+-- 4. Nouveau journal d'activite : trace horodatee de chaque changement
+CREATE TABLE IF NOT EXISTS task_activities (
+  id            SERIAL PRIMARY KEY,
+  task_id       INT NOT NULL,
+  actor_user_id INT NOT NULL,
+  type          VARCHAR(80) NOT NULL,   -- status_changed, assignment_added...
+  from_value    VARCHAR(200),           -- valeur AVANT
+  to_value      VARCHAR(200),           -- valeur APRES
+  message       VARCHAR(500) NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT fk_task_activities_task
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_task_activities_task_id ON task_activities(task_id);
+\end{lstlisting}
+
+\subsection{Points d'entrée exposés}
+
+\begin{longtable}{@{}p{1.4cm}p{7.2cm}p{5.9cm}@{}}
+\caption{Principaux points d'entrée du TODO-Service}\label{tab:ep-task}\\
+\toprule
+\textbf{Méth.} & \textbf{Chemin} & \textbf{Rôle} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Méth.} & \textbf{Chemin} & \textbf{Rôle} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+GET & \code{/api/tasks/} & Liste filtrée (catégorie, statut, priorité…) \\
+POST & \code{/api/tasks/} & Création d'une tâche \\
+GET & \code{/api/tasks/\{id\}} & Détail d'une tâche \\
+PATCH & \code{/api/tasks/\{id\}} & Mise à jour partielle \\
+DELETE & \code{/api/tasks/\{id\}} & Suppression logique \\
+POST & \code{/api/tasks/\{id\}/complete} & Marque la tâche terminée \\
+POST & \code{/api/tasks/\{id\}/archive} & Archive la tâche \\
+GET & \code{/api/tasks/\{id\}/permissions} & Droits de l'appelant sur la tâche \\
+GET & \code{/api/tasks/\{id\}/activity} & Journal d'activité \\
+POST & \code{/api/tasks/\{id\}/assignments} & Assigne un utilisateur \\
+DELETE & \code{/api/tasks/\{id\}/assignments/\{userId\}} & Retire une assignation \\
+POST & \code{/api/tasks/\{id\}/subtasks} & Crée une sous-tâche \\
+PATCH & \code{/api/tasks/\{id\}/subtasks/\{sid\}} & Met à jour une sous-tâche \\
+DELETE & \code{/api/tasks/\{id\}/subtasks/\{sid\}} & Supprime une sous-tâche \\
+POST & \code{/api/tasks/\{id\}/tags} & Ajoute une étiquette \\
+DELETE & \code{/api/tasks/\{id\}/tags/\{tagId\}} & Retire une étiquette \\
+POST & \code{/api/tasks/\{id\}/dependencies} & Ajoute une dépendance \\
+PUT & \code{/api/tasks/\{id\}/recurrence} & Définit la récurrence \\
+POST & \code{/api/tasks/\{id\}/reminders} & Crée un rappel \\
+GET/POST & \code{/api/tasks/kanban-columns} & Colonnes kanban \\
+GET/POST & \code{/api/tasks/saved-filters} & Filtres enregistrés \\
+\end{longtable}
+
+\subsection{Extrait commenté — le \emph{guard} JWT}
+
+Ce \emph{guard} est le même dans les quatre services NestJS. Il illustre
+concrètement l'authentification sans état : aucune requête réseau, aucun accès
+base, une simple vérification de signature.
+
+\begin{lstlisting}[language=TypeScript, caption={\code{src/auth/jwt-auth.guard.ts} — validation locale du jeton}]
+@Injectable()
+export class JwtAuthGuard implements CanActivate {
+  constructor(
+    private readonly jwt: JwtService,
+    private readonly config: ConfigService,
+  ) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<Request>();
+    const header = request.headers.authorization;
+
+    if (!header?.startsWith('Bearer ')) {
+      throw new UnauthorizedException('Missing bearer token');
+    }
+    const token = header.slice('Bearer '.length).trim();
+
+    let payload: AccessTokenPayload;
+    try {
+      // Verification PUREMENT LOCALE : on recalcule la signature HS256 avec le
+      // secret partage. Aucun appel a l'auth-service, donc aucune latence
+      // reseau et aucun point de defaillance unique sur ce chemin.
+      payload = await this.jwt.verifyAsync<AccessTokenPayload>(token, {
+        secret: this.config.getOrThrow<string>('JWT_SIGNING_KEY'),
+        algorithms: ['HS256'],   // on FIXE l'algorithme : se protege de
+                                 // l'attaque "alg: none" / substitution
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid or expired token');
+    }
+
+    const userId = Number(payload.user_id);
+    if (!Number.isFinite(userId)) {
+      throw new UnauthorizedException('Token has no user_id claim');
+    }
+
+    // On attache l'utilisateur A LA REQUETE. On conserve aussi le jeton BRUT :
+    // certains services (statistics, comment) doivent le REJOUER lors de leurs
+    // appels sortants, afin d'heriter exactement des droits de l'appelant.
+    (request as Request & { user: AuthUser }).user = { userId, token };
+    return true;
+  }
+}
+\end{lstlisting}
+
+% -----------------------------------------------------------------------------
+\section{Category-Service}
+% -----------------------------------------------------------------------------
+
+\subsection{Rôle}
+
+Il possède les catégories (Travail, Personnel, Urgent…), leurs membres, leurs
+rôles et leurs invitations. Une tâche appartient à une catégorie ; une catégorie
+appartient à un espace de travail.
+
+\subsection{Modèle de données}
+
+\mermaidfig{10-modele-category-comment}{Modèle de données des services Category et Comment}{modele-cat}{0.95}
+
+\subsection{Points d'entrée exposés}
+
+\begin{longtable}{@{}p{1.4cm}p{7.6cm}p{5.5cm}@{}}
+\caption{Points d'entrée du Category-Service}\label{tab:ep-cat}\\
+\toprule
+\textbf{Méth.} & \textbf{Chemin} & \textbf{Rôle} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Méth.} & \textbf{Chemin} & \textbf{Rôle} \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+GET & \code{/api/categories/} & Liste des catégories visibles \\
+POST & \code{/api/categories/} & Création \\
+GET & \code{/api/categories/\{id\}} & Détail \\
+PATCH & \code{/api/categories/\{id\}} & Mise à jour (admin) \\
+DELETE & \code{/api/categories/\{id\}} & Suppression logique \\
+POST & \code{/api/categories/\{id\}/archive} & Archivage \\
+GET & \code{/api/categories/\{id\}/permissions/me} & Droits de l'appelant \\
+GET & \code{/api/categories/\{id\}/members} & Liste des membres \\
+PATCH & \code{/api/categories/\{id\}/members/\{uid\}} & Changement de rôle \\
+DELETE & \code{/api/categories/\{id\}/members/\{uid\}} & Retrait d'un membre \\
+GET & \code{/api/categories/\{id\}/invitations} & Liste des invitations \\
+POST & \code{/api/categories/\{id\}/invitations} & Invitation par email \\
+POST & \code{/api/categories/invitations/\{token\}/accept} & Acceptation \\
+POST & \code{/api/categories/invitations/\{token\}/reject} & Refus \\
+\end{longtable}
+
+\subsection{Extrait commenté — héritage des rôles}
+
+C'est la règle métier la plus subtile du service : les droits sur une catégorie
+sont \emph{hérités} de l'espace de travail, sauf si une adhésion explicite les
+surcharge.
+
+\begin{lstlisting}[language=TypeScript, caption={\code{src/categories/categories.service.ts} — résolution des droits}]
+private async resolvePermission(user, category): Promise<CategoryPermission> {
+  // Deux sources de droits, interrogees EN PARALLELE :
+  //  1. les droits herites de l'espace de travail (appel HTTP au workspace-service)
+  //  2. une eventuelle adhesion EXPLICITE a cette categorie (base locale)
+  const [workspacePermission, member] = await Promise.all([
+    this.workspacePermissionOrNull(user, category.workspace_id),
+    this.membersRepo.findOne({
+      where: {
+        category_id: category.id,
+        user_id: user.userId,
+        removed_at: IsNull(),   // un membre "retire" ne compte plus
+      },
+    }),
+  ]);
+
+  const workspaceRole = workspacePermission?.role ?? null;
+
+  // L'adhesion EXPLICITE prime sur le role herite. C'est ce qui permet
+  // d'inviter quelqu'un sur UNE SEULE categorie sans lui donner acces a
+  // tout l'espace de travail.
+  const categoryRole = member?.role ?? this.derivedCategoryRole(workspaceRole);
+
+  const isAdmin =
+    workspacePermission?.canAdmin === true ||
+    categoryRole === CategoryRole.CATEGORY_OWNER ||
+    categoryRole === CategoryRole.CATEGORY_ADMIN;
+
+  const canContribute = isAdmin || categoryRole === CategoryRole.CONTRIBUTOR;
+  const canView = workspacePermission?.canView === true || Boolean(member);
+  // ...
+}
+
+// Table de correspondance des roles herites.
+private derivedCategoryRole(role: WorkspacePermission['role']): CategoryRole | null {
+  if (role === 'OWNER')  return CategoryRole.CATEGORY_OWNER;
+  if (role === 'ADMIN')  return CategoryRole.CATEGORY_ADMIN;
+  if (role === 'MEMBER') return CategoryRole.CONTRIBUTOR;
+  if (role === 'VIEWER') return CategoryRole.VIEWER;
+  return null;   // non-membre : aucun droit herite
+}
+\end{lstlisting}
+
+% -----------------------------------------------------------------------------
+\section{Comment-Service}
+% -----------------------------------------------------------------------------
+
+\subsection{Rôle}
+
+Il possède les commentaires, et \emph{uniquement} les commentaires. C'est le
+service qui illustre le mieux la discipline du découpage : il ne stocke aucune
+donnée de tâche, aucune donnée d'utilisateur, et ne réimplémente aucun contrôle
+d'accès.
+
+\begin{choix}[Ne jamais dupliquer une règle de sécurité]
+Pour savoir si un utilisateur a le droit de lire ou d'écrire un commentaire, la
+question à poser est en réalité : « a-t-il le droit de voir la \emph{tâche}
+commentée ? ». Cette règle appartient au \code{task-service}. Le
+\code{comment-service} ne la réécrit donc pas : il l'\textbf{interroge}, en
+appelant \code{GET /api/tasks/\{id\}/permissions} avec le jeton de l'appelant.
+Le coût est un appel HTTP supplémentaire ; le bénéfice est qu'il n'existe qu'un
+seul endroit au monde où la règle de visibilité d'une tâche est écrite. Elle ne
+peut donc pas diverger.
+\end{choix}
+
+\subsection{Modèle de données}
+
+Une seule table (\code{comments}), sans aucune clé étrangère : \code{task\_id},
+\code{category\_id}, \code{workspace\_id} et \code{author\_user\_id} désignent
+des lignes situées dans d'\emph{autres} bases.
+
+\begin{lstlisting}[language=TypeScript, caption={\code{src/comments/entities/comment.entity.ts}}]
+@Entity({ name: 'comments' })
+export class Comment {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  // Reference vers une tache detenue par le task-service, dans une AUTRE base.
+  // C'est un simple entier indexe : aucune contrainte FK n'est possible, et
+  // c'est le prix assume du decouplage. L'integrite est maintenue par les
+  // evenements (task.deleted -> suppression des commentaires associes).
+  @Column({ type: 'int' })
+  @Index()
+  task_id: number;
+
+  @Column({ type: 'int', nullable: true })
+  @Index()
+  category_id: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  @Index()
+  workspace_id: number | null;
+
+  @Column({ type: 'int' })
+  @Index()
+  author_user_id: number;
+
+  @Column({ type: 'text' })
+  body: string;
+
+  // Suppression LOGIQUE : un commentaire supprime reste en base (tracabilite)
+  // mais disparait de toutes les lectures et de l'index de recherche.
+  @Column({ type: 'timestamptz', nullable: true })
+  deleted_at: Date | null;
+
+  @Column({ type: 'int', nullable: true })
+  deleted_by_user_id: number | null;
+
+  @CreateDateColumn({ name: 'created_at' })
+  created_at: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updated_at: Date;
+}
+\end{lstlisting}
+
+\subsection{Points d'entrée exposés}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\linewidth}{@{}p{1.5cm}p{5.6cm}X@{}}
+\toprule
+\textbf{Méth.} & \textbf{Chemin} & \textbf{Rôle} \\
+\midrule
+GET & \code{/api/comments/?task\_id=\{id\}} & Commentaires d'une tâche \\
+POST & \code{/api/comments/} & Ajout d'un commentaire \\
+GET & \code{/api/comments/\{id\}} & Détail \\
+PATCH & \code{/api/comments/\{id\}} & Modification (auteur uniquement) \\
+DELETE & \code{/api/comments/\{id\}} & Suppression logique \\
+\bottomrule
+\end{tabularx}
+\caption{Points d'entrée du Comment-Service}
+\end{table}
+
+\subsection{Extrait commenté — publication enrichie}
+
+Le commentaire publié sur le bus embarque la liste des utilisateurs autorisés à
+le voir (\code{viewerUserIds}). Cette liste sera recopiée telle quelle dans le
+document Elasticsearch, ce qui permettra de filtrer les résultats de recherche
+\emph{à l'intérieur du moteur} (voir section~\ref{sec:search}).
+
+\begin{lstlisting}[language=TypeScript, caption={\code{src/comments/comments.service.ts} — enrichissement de l'événement}]
+private async publish(eventType: string, comment: Comment,
+                      actorUserId: number, task: TaskSnapshot) {
+  await this.events.publish({
+    eventType,                                    // task.comment.created/updated/deleted
+    actorUserId,
+    resource: { type: 'comment', id: comment.id },
+    data: {
+      ...this.searchableData(comment),
+      title: task.title,
+
+      // La LISTE DES AYANTS DROIT est calculee ICI, au moment de la
+      // publication, et voyage AVEC l'evenement. Le search-service n'a donc
+      // aucun appel a faire pour savoir qui peut voir ce commentaire : il
+      // recopie cette liste dans le document indexe.
+      viewerUserIds: [
+        task.author_user_id,
+        comment.author_user_id,
+        ...(task.assignments ?? []).map((a) => a.assignee_user_id),
+      ],
+    },
+  });
+}
+\end{lstlisting}
+
+% -----------------------------------------------------------------------------
+\section{Statistics-Service}
+% -----------------------------------------------------------------------------
+
+\subsection{Rôle}
+
+Il calcule les métriques de productivité : taux de complétion, totaux,
+répartitions par statut, catégorie et priorité, et tendance de complétion.
+
+\begin{choix}[Le seul service sans base de données — et c'est délibéré]
+Un service de statistiques n'a besoin d'aucune donnée \emph{qui lui soit
+propre} : il ne fait que \emph{regarder} celles des autres. Lui donner une base
+signifierait dupliquer les tâches, puis assumer la désynchronisation
+inévitable entre la copie et l'original.
+
+Nous avons donc choisi d'en faire un \textbf{agrégateur sans état}. Il
+\emph{rejoue} le jeton JWT de l'utilisateur auprès du \code{task-service}, et
+n'obtient donc, par construction, que les tâches que cet utilisateur a le droit
+de voir. \textbf{Aucun contrôle d'accès n'est réimplémenté} : il est
+\emph{hérité}. L'agrégation se fait ensuite en mémoire.
+
+C'est aussi la limite du choix : chaque appel refait une requête HTTP complète
+vers le \code{task-service}. À très grande échelle, il faudrait basculer sur un
+modèle de lecture CQRS alimenté par les événements \code{task.*} — toute
+l'infrastructure d'événements nécessaire existe déjà.
+\end{choix}
+
+\mermaidfig{13-flux-statistiques}{Flux d'agrégation des statistiques}{stats}{0.95}
+
+\subsection{Point d'entrée exposé}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\linewidth}{@{}p{1.3cm}p{5.2cm}X@{}}
+\toprule
+\textbf{Méth.} & \textbf{Chemin} & \textbf{Filtres} \\
+\midrule
+GET & \code{/api/statistics/overview} & \code{workspace\_id}, \code{category\_id}, \code{priority}, \code{status} \\
+\bottomrule
+\end{tabularx}
+\caption{Point d'entrée du Statistics-Service}
+\end{table}
+
+Réponse : \code{totalTasks}, \code{completedTasks}, \code{completionRate},
+\code{byStatus}, \code{byCategory}, \code{byPriority}, \code{trends}.
+
+\subsection{Extrait commenté — agrégation}
+
+\begin{lstlisting}[language=TypeScript, caption={\code{src/statistics/statistics.service.ts} — délégation des droits puis agrégation}]
+async overview(user: { token: string }, filters: OverviewFilters) {
+  const tasks = (await this.fetchVisibleTasks(user, filters))
+    .filter((task) => this.matches(task, filters));
+
+  const total = tasks.length;
+  const completed = tasks.filter(
+    (task) => task.status === 'done' || Boolean(task.completed_at),
+  ).length;
+
+  return {
+    totalTasks: total,
+    completedTasks: completed,
+    // Taux arrondi a une decimale ; 0 si aucune tache (evite la division par 0)
+    completionRate: total ? Math.round((completed / total) * 1000) / 10 : 0,
+    byStatus:   this.distribution(tasks, (t) => t.status ?? 'unknown'),
+    byCategory: this.distribution(tasks, (t) => String(t.category_id ?? 'uncategorized')),
+    byPriority: this.distribution(tasks, (t) => t.priority ?? 'normal'),
+    trends:     this.dailyCompletedTrend(tasks),
+  };
+}
+
+private async fetchVisibleTasks(user: { token: string }, filters: OverviewFilters) {
+  const params = new URLSearchParams();
+  if (filters.workspaceId) params.set('workspace_id', String(filters.workspaceId));
+  if (filters.categoryId)  params.set('category_id',  String(filters.categoryId));
+  // ...
+
+  const response = await fetch(`${this.taskBaseUrl()}/api/tasks/?${params}`, {
+    // >>> LE POINT CLE <<<
+    // On REJOUE le jeton de l'utilisateur. Le task-service applique donc SES
+    // regles de visibilite habituelles, et ne nous renvoie que les taches que
+    // CET utilisateur peut voir. Les statistiques ne peuvent structurellement
+    // pas fuiter la tache d'un autre : le controle d'acces est herite, pas
+    // reimplemente.
+    headers: { Authorization: `Bearer ${user.token}` },
+  });
+
+  if (response.status === 401 || response.status === 403) {
+    throw new ForbiddenException('Task statistics access denied.');
+  }
+  return (await response.json()) as TaskSnapshot[];
+}
+\end{lstlisting}
+
+% -----------------------------------------------------------------------------
+\section{Notification-Service \textnormal{\itshape(bonus)}}
+\label{sec:notif}
+% -----------------------------------------------------------------------------
+
+\subsection{Rôle}
+
+Le service optionnel valorisé en bonus. Il détecte les tâches dont l'échéance
+est dépassée ou proche (moins de 24~h), génère des alertes par utilisateur, et
+les pousse en temps réel dans l'interface.
+
+\subsection{Pile technique}
+
+Spring Boot~3.4 / Java~21, \textbf{MySQL~8}, WebSocket natif Spring, consommation
+RabbitMQ via Spring AMQP.
+
+\subsection{Détection des échéances}
+
+Une tâche planifiée (\emph{cron}) balaie chaque heure les tâches dont
+l'échéance tombe dans les 24 prochaines heures et qui ne sont pas terminées,
+puis publie un événement \code{task.deadline\_approaching} par tâche
+concernée.
+
+\mermaidfig{07-sequence-deadline}{Détection des échéances proches et notification temps réel}{deadline}{0.95}
+
+\begin{lstlisting}[language=TypeScript, caption={\code{task-service} — l'ordonnanceur qui déclenche la chaîne de notification}]
+@Injectable()
+export class DeadlineScannerService {
+  // Balayage horaire. L'expression cron est configurable (DEADLINE_SCAN_CRON).
+  @Cron(process.env.DEADLINE_SCAN_CRON ?? CronExpression.EVERY_HOUR)
+  async scanApproachingDeadlines(): Promise<void> {
+    const now = new Date();
+    const horizon = new Date(now.getTime() + this.windowHours * 3600 * 1000);
+
+    const dueSoon = await this.tasksRepo.find({
+      where: {
+        due_at: Between(now, horizon),  // echeance dans la fenetre
+        completed_at: IsNull(),         // pas deja terminee
+        deleted_at: IsNull(),           // pas supprimee
+      },
+      relations: ['assignments'],
+    });
+
+    for (const task of dueSoon) {
+      // On publie UN evenement par tache. Le task-service ne sait pas -- et
+      // n'a pas besoin de savoir -- ce qui en sera fait : notification in-app,
+      // email, webhook... Ajouter un nouveau consommateur ne changera pas
+      // une ligne de ce fichier.
+      await this.events.publish({
+        eventType: 'task.deadline_approaching',
+        actorUserId: null,                       // declenche par le systeme
+        resource: { type: 'task', id: task.id },
+        data: {
+          taskId: task.id,
+          title: task.title,
+          dueAt: task.due_at,
+          workspaceId: task.workspace_id,
+          // Destinataires : les assignes de la tache
+          viewerUserIds: task.assignments.map((a) => a.assignee_user_id),
+        },
+      });
+    }
+  }
+}
+\end{lstlisting}
+
+\subsection{Extrait commenté — idempotence et éventail de destinataires}
+
+Un même événement peut concerner plusieurs personnes. Le service le transforme
+en \emph{N} notifications — une par destinataire — en prenant soin d'exclure
+l'auteur de l'action.
+
+\begin{lstlisting}[language=Java, caption={\code{DomainNotificationEventMapper.java} — un événement, N notifications}]
+private List<Long> recipients(Map<String, Object> data, Long actorUserId,
+                              String... keys) {
+    // LinkedHashSet : deduplique tout en preservant l'ordre.
+    Set<Long> recipients = new LinkedHashSet<>();
+    for (var key : keys) {
+        recipients.addAll(numbers(data, key));
+    }
+
+    // >>> On RETIRE l'acteur de la liste. <<<
+    // Sans cela, celui qui s'assigne une tache a lui-meme recevrait une
+    // notification lui annoncant qu'il vient de s'assigner une tache.
+    // Le garde-fou "size() > 1" evite de vider la liste dans le cas ou
+    // l'acteur est le SEUL destinataire legitime.
+    if (actorUserId != null && recipients.size() > 1) {
+        recipients.remove(actorUserId);
+    }
+    return List.copyOf(recipients);
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=Java, caption={\code{NotificationService.java} — idempotence face aux redistributions RabbitMQ}]
+// RabbitMQ garantit "au moins une fois", PAS "exactement une fois" : un
+// message PEUT etre redistribue (redemarrage du consommateur, acquittement
+// perdu...). Sans protection, l'utilisateur verrait la meme notification en
+// double.
+//
+// On s'appuie sur une contrainte d'unicite (source_event_id, recipient, type).
+if (sourceEventId != null && !sourceEventId.isBlank()) {
+    var existing = notifications.findBySourceEventIdAndRecipientUserIdAndType(
+        sourceEventId, recipientUserId, type);
+    if (existing.isPresent()) {
+        return new NotificationCreation(toResponse(existing.get()), false);
+        //                                    "created = false" ^^^^^
+        // => le WebSocket ne repoussera PAS la notification. Le rejeu est
+        //    totalement transparent pour l'utilisateur final.
+    }
+}
+
+try {
+    // ... insertion
+} catch (DataIntegrityViolationException exc) {
+    // Deux messages traites EN MEME TEMPS peuvent passer le test ci-dessus
+    // tous les deux. La contrainte d'unicite en base tranche : on rattrape
+    // l'exception et on renvoie la ligne gagnante.
+    return existing(...);
+}
+\end{lstlisting}
+
+\subsection{Temps réel : WebSocket authentifié par le jeton}
+
+\begin{lstlisting}[language=Java, caption={\code{NotificationWebSocketHandler.java} — authentification d'une socket}]
+// PROBLEME : un navigateur ne peut PAS ajouter d'en-tete "Authorization" a une
+// connexion WebSocket (l'API WebSocket du navigateur ne le permet pas).
+// SOLUTION : le jeton voyage en parametre de requete, et la connexion est
+// refusee immediatement s'il est absent ou invalide.
+var token = UriComponentsBuilder.fromUri(uri).build()
+        .getQueryParams().getFirst("access_token");
+if (token == null || token.isBlank()) {
+    return null;   // handshake refuse
+}
+
+var jwt = jwtDecoder.decode(token);       // meme secret HS256 partage
+var rawUserId = jwt.getClaim("user_id");
+
+// Registre des sessions : un utilisateur peut avoir PLUSIEURS onglets ouverts.
+// On garde donc un ENSEMBLE de sessions par utilisateur, et une notification
+// est poussee sur toutes ses sessions a la fois.
+sessionsByUser
+    .computeIfAbsent(userId, ignored -> ConcurrentHashMap.newKeySet())
+    .add(session);
+\end{lstlisting}
+
+\subsection{Points d'entrée exposés}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\linewidth}{@{}p{1.5cm}p{6.4cm}X@{}}
+\toprule
+\textbf{Méth.} & \textbf{Chemin} & \textbf{Rôle} \\
+\midrule
+GET & \code{/api/notifications?page=0\&size=20} & Historique paginé \\
+GET & \code{/api/notifications/unread-count} & Nombre de non-lues \\
+PATCH & \code{/api/notifications/\{id\}/read} & Marquer comme lue \\
+PATCH & \code{/api/notifications/read-all} & Tout marquer comme lu \\
+DELETE & \code{/api/notifications/\{id\}} & Suppression logique \\
+\emph{WS} & \code{/ws/notifications?access\_token=…} & Flux temps réel \\
+\bottomrule
+\end{tabularx}
+\caption{Points d'entrée du Notification-Service}
+\end{table}
+
+% =============================================================================
+\chapter{Fonctionnalités au-delà du cahier des charges}
+\label{chap:extras}
+% =============================================================================
+
+Ce chapitre présente les quatre services supplémentaires et les mécanismes
+transverses que nous avons développés sans qu'ils soient demandés. Ils ne font
+pas partie du périmètre noté ; nous les présentons parce qu'ils constituent, de
+notre point de vue, la partie la plus aboutie du projet.
+
+\section{Le bus d'événements RabbitMQ}
+
+\subsection{Un exchange topic, une enveloppe unique}
+
+Tous les événements transitent par un \emph{unique} exchange de type
+\code{topic}, nommé \code{flowforge.events}. La clé de routage est le type
+d'événement lui-même (\code{task.assigned}, \code{user.registered}…), ce qui
+permet à un consommateur de s'abonner par motif (\code{task.*}).
+
+Chaque message respecte la même enveloppe, quel que soit le langage du
+producteur :
+
+\begin{lstlisting}[language=json, caption={Enveloppe commune à tous les événements}]
+{
+  "eventId":     "a3f1c8e2-...",        // UUID : sert de cle d'idempotence
+  "eventType":   "task.assigned",       // = routing key
+  "occurredAt":  "2026-07-12T12:00:00Z",
+  "producer":    "task-service",
+  "actorUserId": 1,                     // qui a declenche l'action
+  "resource":    { "type": "task", "id": 42 },
+  "data":        { }                    // charge utile propre a l'evenement
+}
+\end{lstlisting}
+
+\begin{pointcle}[Trois langages, un seul contrat]
+Un événement publié en Python par l'\code{auth-service} est consommé en Java par
+l'\code{email-service} et en Java par le \code{search-service}, tandis qu'un
+événement publié en TypeScript par le \code{task-service} est consommé par les
+mêmes. Aucun code n'est partagé entre ces services — seul le \emph{contrat} de
+l'enveloppe l'est. C'est précisément ce que doit permettre une architecture
+microservices.
+\end{pointcle}
+
+\subsection{Fiabilité : rebut, réessais, idempotence}
+
+Chaque consommateur possède sa propre file durable, son propre exchange de rebut
+(\emph{dead-letter exchange}) et sa propre file de rebut.
+
+\begin{lstlisting}[language=Java, caption={\code{RabbitEventConfig.java} — file durable, réessais et republication en rebut}]
+@Bean
+Queue searchEventsQueue(EventConsumerProperties properties) {
+    return QueueBuilder.durable(properties.queue())
+            // Si le message est definitivement rejete, RabbitMQ le route
+            // AUTOMATIQUEMENT vers cet exchange de rebut.
+            .deadLetterExchange(properties.deadLetterExchange())
+            .deadLetterRoutingKey(properties.deadLetterRoutingKey())
+            .build();
+}
+
+@Bean
+RetryOperationsInterceptor searchRetryInterceptor(RabbitTemplate rabbitTemplate,
+                                                  EventConsumerProperties properties) {
+    return RetryInterceptorBuilder.stateless()
+            .maxAttempts(properties.maxAttempts())         // 3 tentatives
+            // Backoff EXPONENTIEL : 1 000 ms, puis x2, plafonne a 10 000 ms.
+            // Une panne breve (redemarrage d'Elasticsearch) se resorbe donc
+            // toute seule, sans marteler le service en panne.
+            .backOffOptions(properties.retryBackoffMs(), 2.0,
+                            properties.retryBackoffMs() * 10)
+            // Apres la derniere tentative, le message est REPUBLIE dans la DLQ
+            // au lieu d'etre detruit : il reste inspectable et rejouable.
+            .recoverer(new RepublishMessageRecoverer(
+                    rabbitTemplate,
+                    properties.deadLetterExchange(),
+                    properties.deadLetterRoutingKey()))
+            .build();
+}
+
+@Bean
+SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(...) {
+    var factory = new SimpleRabbitListenerContainerFactory();
+    factory.setMessageConverter(jsonMessageConverter);
+    factory.setAcknowledgeMode(AcknowledgeMode.AUTO);
+    // >>> IMPORTANT <<<
+    // Sans cette ligne, un message en echec serait REMIS EN FILE indefiniment
+    // et bloquerait le consommateur dans une boucle infinie ("poison message").
+    factory.setDefaultRequeueRejected(false);
+    factory.setAdviceChain(searchRetryInterceptor);
+    return factory;
+}
+\end{lstlisting}
+
+\section{Recherche full-text avec Elasticsearch}
+\label{sec:search}
+
+\subsection{Indexation pilotée par les événements}
+
+Le \code{search-service} ne possède aucune donnée : il maintient une
+\emph{projection} des données des autres services, alimentée par 18 clés de
+routage RabbitMQ, dans cinq index Elasticsearch.
+
+\mermaidfig{12-recherche-elasticsearch}{Indexation événementielle et requête filtrée par les droits}{search}{0.9}
+
+\subsection{Le filtrage des droits est poussé dans Elasticsearch}
+
+C'est le point dont nous sommes le plus satisfaits. Une erreur classique
+consiste à interroger le moteur puis à filtrer les résultats côté application :
+c'est à la fois lent (on rapatrie des documents pour les jeter) et faux (la
+pagination et les scores deviennent incohérents). Ici, la liste des ayants droit
+voyage \emph{dans le document indexé}, et le filtre est appliqué \emph{par le
+moteur}.
+
+\begin{lstlisting}[language=Java, caption={\code{SearchQueryService.java} — requête bool avec filtre d'autorisation}]
+var body = Map.of(
+    "from", safePage * safeSize,
+    "size", safeSize,
+    "query", Map.of("bool", Map.of(
+
+        // --- Pertinence : recherche multi-champs avec ponderation ---
+        "must", List.of(Map.of(
+            "multi_match", Map.of(
+                "query", q,
+                // Le titre pese 4x plus que la description : une correspondance
+                // dans le titre remonte donc naturellement en tete.
+                "fields", List.of("title^4", "username^4", "name^4",
+                                  "description^2", "body^2", "biography", "tags"),
+                "type", "best_fields",
+                "operator", "and"
+            )
+        )),
+
+        // --- Autorisation : filtre OBLIGATOIRE, applique PAR le moteur ---
+        // Un utilisateur ne peut PAS obtenir dans ses resultats une ressource
+        // qu'il serait incapable d'ouvrir. Le filtrage n'est jamais fait
+        // apres coup : il fait partie de la requete elle-meme.
+        "filter", filters
+    ))
+);
+
+filters.add(Map.of("bool", Map.of(
+    "should", List.of(
+        Map.of("term", Map.of("viewerUserIds", userId)),  // je peux voir la tache
+        Map.of("term", Map.of("memberUserIds", userId)),  // je suis membre
+        Map.of("term", Map.of("ownerUserId",   userId)),  // j'en suis proprietaire
+        Map.of("term", Map.of("authorUserId",  userId)),  // j'en suis l'auteur
+        Map.of("term", Map.of("type",          "user")),  // annuaire public
+        Map.of("term", Map.of("visibility",    "PUBLIC")) // espace public
+    ),
+    "minimum_should_match", 1    // au moins UNE de ces conditions
+)));
+\end{lstlisting}
+
+\subsection{Reconstruction de l'index}
+
+L'indexation étant asynchrone, l'index peut diverger (bug de consommateur, perte
+de messages, ajout d'un nouveau champ). Un point d'entrée interne
+\code{POST /api/search/internal/reindex}, protégé par un en-tête
+\code{X-Internal-Key}, rejoue des instantanés paginés depuis les endpoints
+\code{/internal/search-snapshots} de chaque service propriétaire. L'index peut
+donc être reconstruit intégralement à tout moment, sans interruption de service.
+
+\section{Service d'emailing idempotent}
+
+L'\code{email-service} consomme \code{user.registered} et envoie un email de
+bienvenue via SMTP, à partir de gabarits HTML. Sa véritable valeur est ailleurs :
+c'est un \textbf{journal de livraison}.
+
+\begin{lstlisting}[language=Java, caption={\code{EmailDeliveryService.java} — livraison « exactement une fois »}]
+// Toute tentative d'envoi est PERSISTEE dans la table email_deliveries, sous
+// une cle d'idempotence deterministe.
+var delivery = findOrCreateDelivery(event, email);
+
+// Si un email identique a DEJA ete envoye, on ne le renvoie pas. RabbitMQ
+// pouvant redistribuer un message, sans ce garde-fou l'utilisateur recevrait
+// plusieurs fois le meme email de bienvenue.
+if (delivery.getStatus() == DeliveryStatus.SENT) {
+    logger.debug("Skipping duplicate email delivery {}", delivery.getId());
+    return;
+}
+if (!email.shouldSend()) {
+    markPermanentFailure(delivery, email.failureReason());
+    return;
+}
+sendWithRetry(delivery, email);
+
+// ---------------------------------------------------------------------------
+// La cle d'idempotence est un HACHE des elements qui definissent l'unicite
+// d'un envoi : l'evenement source, son type, le gabarit et le destinataire.
+// Deux livraisons du MEME message produisent donc la MEME cle -- et la
+// contrainte d'unicite en base fait le reste.
+raw = event.eventId() + ":" + event.eventType() + ":"
+    + email.templateKey() + ":" + nullToEmpty(email.recipient());
+return "email:" + sha256(raw);
+\end{lstlisting}
+
+\begin{pointcle}[Pourquoi les emails de réinitialisation ne passent pas par le bus]
+L'email de réinitialisation de mot de passe et les invitations sont
+\emph{délibérément} envoyés en direct, sans passer par RabbitMQ. Motif : ils
+contiennent des \textbf{jetons à usage unique}. Publier un tel jeton sur un bus
+partagé, où il serait persisté sur disque et lisible par tout consommateur
+présent ou futur, reviendrait à en faire un secret partagé. Un bus d'événements
+n'est pas un canal sûr pour un secret.
+\end{pointcle}
+
+\section{Espaces de travail et pièces jointes}
+
+\subsection{Workspace-Service}
+
+Il possède les espaces de travail, leurs membres, leurs rôles
+(\code{OWNER}, \code{ADMIN}, \code{MEMBER}, \code{VIEWER}) et leurs invitations.
+C'est la source de vérité des droits, dont héritent les catégories puis les
+tâches. À l'inscription, il consomme \code{user.registered} et provisionne
+automatiquement un espace de travail personnel.
+
+\subsection{Attachment-Service}
+
+Il gère les pièces jointes des tâches et des commentaires. Les \emph{octets}
+sont déposés dans un stockage objet (Azure Blob) ; la base ne contient que les
+\textbf{métadonnées} et la clé de l'objet. Le téléchargement se fait par une
+\textbf{URL signée à durée limitée} (15~minutes) : le fichier n'est jamais servi
+par le service lui-même, qui ne devient donc jamais un goulot d'étranglement
+réseau.
+
+\mermaidfig{11-modele-workspace-notification}{Modèle de données des services Workspace, Notification, Attachment et Email}{modele-ws}{1.0}
+
+\section{Bilan des apports hors périmètre}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabularx}{\linewidth}{@{}p{4.3cm}X@{}}
+\toprule
+\textbf{Apport} & \textbf{Intérêt technique} \\
+\midrule
+Bus RabbitMQ & Découplage réel : ajouter un consommateur ne modifie aucun producteur. \\
+\addlinespace
+Files de rebut + réessais & Aucun message n'est perdu ni rejoué en boucle. \\
+\addlinespace
+Idempotence & Tolérance native à la redistribution « au moins une fois ». \\
+\addlinespace
+Elasticsearch & Recherche full-text pondérée, avec droits appliqués dans le moteur. \\
+\addlinespace
+WebSocket & Notifications poussées, sans sondage côté client. \\
+\addlinespace
+Stockage objet & La base ne grossit pas avec les fichiers ; URLs signées. \\
+\addlinespace
+Publication transactionnelle & Aucun événement émis pour une écriture annulée. \\
+\bottomrule
+\end{tabularx}
+\caption{Synthèse des fonctionnalités non demandées}
+\end{table}
+
+% =============================================================================
+\chapter{Captures d'écran du frontend}
+% =============================================================================
+
+Le frontend est une \emph{single-page application} Vue~3 + TypeScript, construite
+avec Vite et servie depuis la racine \code{/} par la passerelle. Elle communique
+exclusivement avec \code{http://localhost:8080} : aucune URL de service n'est
+codée en dur.
+
+\section{Authentification}
+
+\capture{01-login}{\textbf{Page de connexion.} L'utilisateur saisit son
+identifiant et son mot de passe. En cas d'échec, l'erreur renvoyée par
+l'\code{auth-service} s'affiche en ligne sous le formulaire. Si le compte a la
+double authentification activée, le serveur répond \code{202} avec
+\code{two\_factor\_required} et l'interface demande alors le code TOTP. Les
+jetons reçus (\code{access} et \code{refresh}) sont stockés côté navigateur,
+puis injectés automatiquement dans chaque appel ultérieur.}{login}
+
+\capture{02-register}{\textbf{Page d'inscription.} Trois champs seulement :
+nom d'utilisateur, email et mot de passe (8 caractères minimum, vérifié côté
+serveur). À la validation, le compte est créé, l'utilisateur est connecté
+automatiquement, puis redirigé vers l'écran de préparation de l'espace de
+travail.}{register}
+
+\capture{03-preparing-workspace}{\textbf{Préparation de l'espace de travail.}
+Cet écran est la \emph{preuve visible} de la chaîne de provisionnement
+asynchrone. Après l'inscription, le profil et l'espace personnel n'existent pas
+encore : ils seront créés par deux consommateurs RabbitMQ distincts réagissant à
+l'événement \code{user.registered}. L'interface sonde donc le backend toutes les
+1,2~seconde jusqu'à ce que les deux ressources apparaissent, en affichant l'état
+d'avancement, puis bascule vers l'accueil.}{preparing}
+
+\capture{04-forgot-password}{\textbf{Réinitialisation du mot de passe.}
+Déroulement en deux temps sur le même écran : saisie de l'email (le serveur
+répond toujours par un message neutre, afin de ne pas révéler si l'adresse
+existe), puis saisie du jeton reçu et du nouveau mot de passe.}{forgot}
+
+\section{Tableau de bord et tâches}
+
+\capture{05-home}{\textbf{Accueil.} Vue de synthèse de l'espace de travail
+courant : tâches assignées à l'utilisateur, catégories récentes avec leur
+avancement, échéances proches, et membres de l'espace. La barre supérieure
+contient le sélecteur d'espace, la recherche globale, le bouton de création et la
+cloche de notifications avec son compteur de non-lues.}{home}
+
+\capture{06-your-work}{\textbf{« Votre travail ».} Liste de toutes les tâches
+assignées à l'utilisateur courant, tous espaces confondus, filtrables par texte
+et par statut.}{yourwork}
+
+\capture{07-task-create}{\textbf{Création d'une tâche.} La fenêtre modale est
+accessible depuis n'importe quel écran. Elle permet de renseigner le titre, la
+description, la catégorie, la priorité, l'assigné et la date d'échéance. À la
+validation, le \code{task-service} publie \code{task.created}, ce qui déclenche
+l'indexation Elasticsearch en arrière-plan.}{taskcreate}
+
+\capture{08-task-details}{\textbf{Détail d'une tâche.} Description, sous-tâches
+cochables, pièces jointes, commentaires et journal d'activité. Le panneau latéral
+porte le statut, la priorité, l'assigné, l'échéance et les étiquettes. Un
+utilisateur sans droit de contribution voit les contrôles désactivés : les droits
+sont chargés depuis \code{GET /api/tasks/\{id\}/permissions} et appliqués à
+l'interface.}{taskdetails}
+
+\capture{09-task-comments}{\textbf{Commentaires d'une tâche.} Le fil de
+discussion est servi par le \code{comment-service}, qui a préalablement vérifié
+auprès du \code{task-service} que l'utilisateur a le droit de voir la tâche.
+Chaque commentaire publié est indexé dans Elasticsearch et devient donc
+immédiatement cherchable.}{comments}
+
+\section{Catégories}
+
+\capture{10-categories-list}{\textbf{Liste des catégories.} Chaque ligne affiche
+la catégorie, son responsable, sa barre d'avancement (tâches terminées / total)
+et sa date de mise à jour.}{catlist}
+
+\capture{11-category-new}{\textbf{Création d'une catégorie.} Nom, clé courte
+(utilisée dans les identifiants de tâches, par exemple \code{WEB-42}),
+description et couleur.}{catnew}
+
+\capture{12-category-board}{\textbf{Vue kanban d'une catégorie.} Les tâches sont
+réparties en cinq colonnes selon leur statut. Le changement de statut est
+immédiatement persisté et journalisé dans \code{task\_activities}. Un
+utilisateur en lecture seule voit le sélecteur désactivé.}{board}
+
+\capture{13-category-overview}{\textbf{Synthèse d'une catégorie.} Compteurs
+(total, en cours, terminées, avec échéance) et informations générales.}{catoverview}
+
+\capture{14-category-members}{\textbf{Membres et invitations d'une catégorie.}
+L'invitation génère un jeton à usage unique, affiché \emph{une seule fois} :
+seul son haché SHA-256 est conservé en base.}{catmembers}
+
+\section{Statistiques}
+
+\capture{15-statistics}{\textbf{Tableau de bord des statistiques.} Servi par le
+\code{statistics-service}, qui agrège à la volée les tâches visibles par
+l'utilisateur. On y trouve le taux de complétion, la répartition par statut, par
+priorité et par catégorie, ainsi que la tendance de complétion des derniers
+jours. Les filtres en haut de page sont recombinables et relancent l'agrégation.}{stats}
+
+\section{Recherche}
+
+\capture{16-search}{\textbf{Recherche globale.} La saisie est débattue de
+250~ms, puis interroge Elasticsearch via \code{/api/search}. Les résultats sont
+regroupés par type (tâche, catégorie, espace, utilisateur, commentaire). Le
+filtre d'autorisation étant appliqué \emph{dans} le moteur, aucun résultat
+inaccessible ne peut apparaître.}{search}
+
+\section{Notifications}
+
+\capture{17-notifications}{\textbf{Centre de notifications.} Historique paginé,
+servi par le \code{notification-service} depuis MySQL. Actions disponibles :
+marquer comme lu, tout marquer comme lu, supprimer.}{notifs}
+
+\capture{18-notification-realtime}{\textbf{Notification temps réel.} Lorsqu'un
+collègue assigne une tâche, l'événement \code{task.assigned} est consommé, la
+notification est persistée puis poussée sur la WebSocket ouverte. Le badge de la
+cloche s'incrémente \emph{sans rechargement de page ni sondage}.}{realtime}
+
+\section{Profil et sécurité}
+
+\capture{19-profile}{\textbf{Profil utilisateur.} Photo (JPG/PNG/WebP, 2~Mo
+maximum, validée côté serveur puis déposée dans le stockage objet), biographie,
+fuseau horaire et langue.}{profile}
+
+\capture{20-security}{\textbf{Sécurité.} Changement de mot de passe : à la
+validation, \emph{toutes} les sessions sont révoquées et l'utilisateur est
+redirigé vers la connexion. La double authentification se configure depuis cet
+écran.}{security}
+
+\capture{21-sessions}{\textbf{Sessions actives.} Chaque jeton de rafraîchissement
+émis apparaît ici, avec son appareil, son adresse IP et sa date. Chaque session
+peut être révoquée individuellement — ce que permet la matérialisation des
+sessions en base (voir \code{AuthSession}).}{sessions}
+
+\section{Espaces de travail}
+
+\capture{22-workspaces}{\textbf{Liste des espaces de travail.} L'espace
+personnel a été créé automatiquement à l'inscription par le
+\code{workspace-service}, en réaction à \code{user.registered}.}{workspaces}
+
+\capture{23-workspace-settings}{\textbf{Paramètres d'un espace de travail.}
+Écran réservé aux rôles \code{OWNER} et \code{ADMIN} : visibilité, gestion des
+membres, changement de rôle, invitations, archivage.}{wssettings}
+
+\section{Infrastructure}
+
+\capture{24-rabbitmq}{\textbf{Console d'administration RabbitMQ}
+(\code{localhost:15672}). On y voit l'exchange \code{flowforge.events}, les cinq
+files de consommateurs et leurs files de rebut associées, ainsi que le débit de
+messages.}{rabbitmq}
+
+\capture{25-elasticsearch}{\textbf{Index Elasticsearch} (\code{localhost:9200}).
+Les cinq index (\code{flowforge\_tasks}, \code{flowforge\_comments},
+\code{flowforge\_categories}, \code{flowforge\_workspaces},
+\code{flowforge\_users}) et le nombre de documents indexés.}{elastic}
+
+\capture{26-welcome-email}{\textbf{Email de bienvenue.} Envoyé par
+l'\code{email-service} en réaction à \code{user.registered}, à partir d'un
+gabarit HTML. Chaque envoi est journalisé dans la table \code{email\_deliveries}
+sous une clé d'idempotence, ce qui garantit qu'un même email n'est jamais envoyé
+deux fois.}{email}
+
+\capture{27-docker-ps}{\textbf{Conteneurs en cours d'exécution}
+(\code{docker compose ps}). Les 19 conteneurs de la plateforme : 11 services,
+9 bases, RabbitMQ, Elasticsearch, la passerelle et le frontend.}{docker}
+
+% =============================================================================
+\appendix
+\chapter{Annexes}
+% =============================================================================
+
+\section{Fichier \texttt{docker-compose.yml}}
+\label{ann:compose}
+
+Ce fichier unique orchestre l'intégralité de la plateforme. La commande
+\code{docker compose up -d --build} suffit à démarrer les 19 conteneurs.
+
+\lstinputlisting[language=yaml, basicstyle=\ttfamily\tiny, numbers=left]{annexes/docker-compose.yml}
+
+\section{Fichier \texttt{nginx.conf}}
+\label{ann:nginx}
+
+Configuration de la passerelle API : service de la SPA depuis la racine et
+\emph{reverse proxy} de chaque microservice backend.
+
+\lstinputlisting[language=nginxconf, basicstyle=\ttfamily\scriptsize, numbers=left]{annexes/nginx.conf}
+
+\section{Code source des diagrammes (Mermaid)}
+\label{ann:mermaid}
+
+Tous les diagrammes de ce rapport ont été écrits en \textbf{Mermaid}, puis
+rendus en PDF vectoriel par \code{mermaid-cli} (script
+\code{build-diagrams.sh}). Les sources sont reproduites ci-dessous.
+
+\subsection{Architecture globale (figure~\ref{fig:archi})}
+\lstinputlisting[numbers=none, basicstyle=\ttfamily\tiny]{diagrams/01-architecture-globale.mmd}
+
+\subsection{Routage NGINX (figure~\ref{fig:routage})}
+\lstinputlisting[numbers=none, basicstyle=\ttfamily\tiny]{diagrams/02-routage-nginx.mmd}
+
+\subsection{Topologie Docker (figure~\ref{fig:docker})}
+\lstinputlisting[numbers=none, basicstyle=\ttfamily\tiny]{diagrams/03-topologie-docker.mmd}
+
+\subsection{Séquence d'inscription (figure~\ref{fig:seq-inscription})}
+\lstinputlisting[numbers=none, basicstyle=\ttfamily\tiny]{diagrams/04-sequence-inscription.mmd}
+
+\subsection{Cycle de vie d'une tâche (figure~\ref{fig:seq-tache})}
+\lstinputlisting[numbers=none, basicstyle=\ttfamily\tiny]{diagrams/05-sequence-tache.mmd}
+
+\subsection{Bus d'événements (figure~\ref{fig:bus})}
+\lstinputlisting[numbers=none, basicstyle=\ttfamily\tiny]{diagrams/06-bus-evenements.mmd}
+
+\subsection{Détection des échéances (figure~\ref{fig:deadline})}
+\lstinputlisting[numbers=none, basicstyle=\ttfamily\tiny]{diagrams/07-sequence-deadline.mmd}
+
+\subsection{Modèle Auth \& User (figure~\ref{fig:modele-auth})}
+\lstinputlisting[numbers=none, basicstyle=\ttfamily\tiny]{diagrams/08-modele-auth-user.mmd}
+
+\subsection{Modèle Task (figure~\ref{fig:modele-task})}
+\lstinputlisting[numbers=none, basicstyle=\ttfamily\tiny]{diagrams/09-modele-task.mmd}
+
+\subsection{Modèle Category \& Comment (figure~\ref{fig:modele-cat})}
+\lstinputlisting[numbers=none, basicstyle=\ttfamily\tiny]{diagrams/10-modele-category-comment.mmd}
+
+\subsection{Modèle Workspace, Notification, Attachment, Email (figure~\ref{fig:modele-ws})}
+\lstinputlisting[numbers=none, basicstyle=\ttfamily\tiny]{diagrams/11-modele-workspace-notification.mmd}
+
+\subsection{Recherche Elasticsearch (figure~\ref{fig:search})}
+\lstinputlisting[numbers=none, basicstyle=\ttfamily\tiny]{diagrams/12-recherche-elasticsearch.mmd}
+
+\subsection{Flux des statistiques (figure~\ref{fig:stats})}
+\lstinputlisting[numbers=none, basicstyle=\ttfamily\tiny]{diagrams/13-flux-statistiques.mmd}
+
+\section{Démarrage de la plateforme}
+
+\begin{lstlisting}[language=bash, numbers=none]
+# 1. Cloner le depot
+git clone <url-du-depot> && cd microservices-PFE
+
+# 2. Demarrer les 19 conteneurs (premiere execution : ~5 min de build)
+docker compose up -d --build
+
+# 3. Verifier que tout tourne
+docker compose ps
+
+# 4. Ouvrir l'application -- UNE SEULE adresse a connaitre
+#    http://localhost:8080
+
+# Interfaces d'administration (optionnelles) :
+#    http://localhost:15672   console RabbitMQ (flowforge / flowforge_password)
+#    http://localhost:9200    API Elasticsearch
+\end{lstlisting}
+
+\end{document}

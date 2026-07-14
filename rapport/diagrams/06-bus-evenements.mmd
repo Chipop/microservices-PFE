@@ -1,0 +1,32 @@
+%%{init: {'theme':'neutral', 'flowchart': {'curve':'basis', 'nodeSpacing':25, 'rankSpacing':70}}}%%
+flowchart TB
+    P1["<b>auth-service</b><br/><i>pika (Python)</i>"]
+    P2["<b>user-service</b><br/><i>pika (Python)</i>"]
+    P3["<b>task-service</b><br/><i>amqplib (Node)</i>"]
+    P4["<b>category-service</b><br/><i>amqplib (Node)</i>"]
+    P5["<b>comment-service</b><br/><i>amqplib (Node)</i>"]
+    P6["<b>workspace-service</b><br/><i>Spring AMQP</i>"]
+    P7["<b>attachment-service</b><br/><i>Spring AMQP</i>"]
+
+    EX{{"<b>flowforge.events</b> — exchange TOPIC durable<br/>routing key = eventType &nbsp;·&nbsp; ex. « task.assigned »<br/>messages persistants &nbsp;·&nbsp; content-type application/json"}}
+
+    Q1["<b>user-service.events</b><br/>user.registered<br/><i>→ crée le profil</i>"]
+    Q2["<b>workspace-service.events</b><br/>user.registered<br/><i>→ crée l'espace personnel</i>"]
+    Q3["<b>notification-service.events</b><br/>task.assigned<br/>task.completed<br/>task.deadline_approaching<br/>user.mentioned<br/>workspace.role_changed"]
+    Q4["<b>email-service.events</b><br/>user.registered<br/>task.weekly_summary"]
+    Q5["<b>search-service.events</b><br/>task.* · task.comment.*<br/>category.* · workspace.*<br/>user.profile.*<br/><i>(18 clés de routage)</i>"]
+
+    DL["<b>Dead-letter</b> — un DLX et une DLQ par consommateur<br/>&lt;service&gt;.events.dlx (direct) → &lt;service&gt;.events.dlq<br/>3 tentatives · backoff exponentiel 1 000 ms → ×2 → 10 000 ms<br/><i>Au-delà, le message est republié dans la DLQ : jamais perdu, jamais rejoué en boucle.</i>"]
+
+    P1 & P2 & P3 & P4 & P5 & P6 & P7 --> EX
+    EX --> Q1 & Q2 & Q3 & Q4 & Q5
+    Q1 & Q2 & Q3 & Q4 & Q5 -. "échec après 3 essais" .-> DL
+
+    classDef prod fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef ex fill:#fef3c7,stroke:#b45309,color:#78350f,font-weight:bold
+    classDef cons fill:#dcfce7,stroke:#15803d,color:#14532d
+    classDef dl fill:#fee2e2,stroke:#b91c1c,color:#7f1d1d
+    class P1,P2,P3,P4,P5,P6,P7 prod
+    class EX ex
+    class Q1,Q2,Q3,Q4,Q5 cons
+    class DL dl

@@ -1,0 +1,113 @@
+%%{init: {'theme':'neutral'}}%%
+classDiagram
+    direction TB
+
+    class Task["tasks"] {
+        +serial id PK
+        +int owner_user_id
+        +int workspace_id NULL
+        +int project_id NULL
+        +int author_user_id NULL
+        +varchar(200) title
+        +text description
+        +enum status
+        +enum priority
+        +timestamptz due_at
+        +timestamptz completed_at
+        +timestamptz archived_at
+        +timestamptz deleted_at
+        +int deleted_by_user_id
+        +int kanban_column_id FK
+    }
+
+    class TaskActivity["task_activities"] {
+        +serial id PK
+        +int task_id FK
+        +int actor_user_id
+        +varchar(80) type
+        +varchar(200) from_value
+        +varchar(200) to_value
+        +varchar(500) message
+    }
+
+    class TaskAssignment["task_assignments"] {
+        +serial id PK
+        +int task_id FK
+        +int assignee_user_id
+        +int assigned_by_user_id
+        UNIQUE(task_id, assignee_user_id)
+    }
+
+    class Subtask["subtasks"] {
+        +serial id PK
+        +int task_id FK
+        +varchar(200) title
+        +bool done
+        +int position
+    }
+
+    class TaskTag["task_tags"] {
+        +serial id PK
+        +int task_id FK
+        +int tag_id FK
+        UNIQUE(task_id, tag_id)
+    }
+
+    class Tag["tags"] {
+        +serial id PK
+        +int owner_user_id
+        +varchar(80) name
+        +varchar(32) color
+        UNIQUE(owner_user_id, name)
+    }
+
+    class TaskDependency["task_dependencies"] {
+        +serial id PK
+        +int task_id FK
+        +int depends_on_task_id
+        UNIQUE(task_id, depends_on_task_id)
+    }
+
+    class TaskRecurrence["task_recurrences"] {
+        +serial id PK
+        +int task_id FK UNIQUE
+        +bool enabled
+        +jsonb rule
+    }
+
+    class TaskReminder["task_reminders"] {
+        +serial id PK
+        +int task_id FK
+        +timestamptz remind_at
+        +enum status
+        +timestamptz sent_at
+    }
+
+    class KanbanColumn["kanban_columns"] {
+        +serial id PK
+        +int owner_user_id
+        +varchar(120) name
+        +int position
+        UNIQUE(owner_user_id, name)
+    }
+
+    class SavedFilter["saved_filters"] {
+        +serial id PK
+        +int owner_user_id
+        +varchar(120) name
+        +jsonb criteria
+        UNIQUE(owner_user_id, name)
+    }
+
+    Task "1" --> "0..*" TaskActivity : ON DELETE CASCADE
+    Task "1" --> "0..*" TaskAssignment
+    Task "1" --> "0..*" Subtask
+    Task "1" --> "0..*" TaskTag
+    TaskTag "0..*" --> "1" Tag
+    Task "1" --> "0..*" TaskDependency
+    Task "1" --> "0..1" TaskRecurrence
+    Task "1" --> "0..*" TaskReminder
+    KanbanColumn "1" --> "0..*" Task : colonne
+
+    note for Task "status : enum natif PostgreSQL<br/>(backlog, todo, in_progress, review, done, archived).<br/>completed_at et archived_at sont DÉRIVÉS du statut.<br/>priority : low, normal, high, urgent."
+    note for TaskActivity "Journal d'audit ajouté lors du refactoring :<br/>task_created, status_changed, priority_changed,<br/>assignment_added, assignment_removed."

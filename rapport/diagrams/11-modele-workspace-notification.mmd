@@ -1,0 +1,93 @@
+%%{init: {'theme':'neutral'}}%%
+classDiagram
+    direction TB
+
+    namespace WorkspaceService.PostgreSQL {
+        class Workspace["workspaces"] {
+            +bigserial id PK
+            +varchar(160) name
+            +text description
+            +bigint owner_user_id
+            +varchar(32) visibility
+            +bool public_contributions_enabled
+            +varchar(32) workspace_type
+            +timestamptz archived_at
+            +timestamptz deleted_at
+        }
+
+        class WorkspaceMember["workspace_members"] {
+            +bigserial id PK
+            +bigint workspace_id FK
+            +bigint user_id
+            +varchar(32) role
+            +timestamptz joined_at
+            +timestamptz removed_at
+            UNIQUE(workspace_id, user_id)
+        }
+
+        class WorkspaceInvitation["workspace_invitations"] {
+            +bigserial id PK
+            +bigint workspace_id FK
+            +varchar(254) invited_email
+            +varchar(32) role
+            +varchar(64) token_hash UNIQUE
+            +varchar(32) status
+            +timestamptz expires_at
+        }
+    }
+
+    namespace NotificationService.MySQL {
+        class Notification["notifications"] {
+            +bigint id PK AUTO_INCREMENT
+            +bigint recipient_user_id
+            +varchar(96) source_event_id
+            +varchar(64) type
+            +varchar(160) title
+            +text message
+            +bigint related_resource_id
+            +varchar(64) related_resource_type
+            +tinyint(1) is_read
+            +datetime(6) read_at
+            +datetime(6) deleted_at
+            UNIQUE(source_event_id, recipient_user_id, type)
+        }
+    }
+
+    namespace AttachmentService.PostgreSQL {
+        class Attachment["attachments"] {
+            +bigserial id PK
+            +bigint uploader_user_id
+            +varchar(32) target_type
+            +bigint target_id
+            +bigint parent_task_id
+            +varchar(255) original_filename
+            +varchar(1024) stored_blob_key UNIQUE
+            +varchar(128) content_type
+            +bigint size_bytes
+            +timestamptz deleted_at
+        }
+    }
+
+    namespace EmailService.MySQL {
+        class EmailDelivery["email_deliveries"] {
+            +bigint id PK AUTO_INCREMENT
+            +varchar(180) idempotency_key UNIQUE
+            +varchar(64) source_event_id
+            +varchar(96) source_event_type
+            +varchar(254) recipient_email
+            +varchar(200) subject
+            +varchar(80) template_key
+            +varchar(32) status
+            +int attempt_count
+            +text last_error
+            +datetime(6) sent_at
+        }
+    }
+
+    Workspace "1" --> "0..*" WorkspaceMember : ON DELETE CASCADE
+    Workspace "1" --> "0..*" WorkspaceInvitation : ON DELETE CASCADE
+
+    note for Workspace "visibility ∈ PRIVATE, PUBLIC<br/>workspace_type ∈ PERSONAL, TEAM<br/>role ∈ OWNER, ADMIN, MEMBER, VIEWER<br/>Le workspace PERSONAL est créé automatiquement<br/>à la consommation de « user.registered »."
+    note for Notification "type ∈ TASK_ASSIGNED, TASK_COMPLETED,<br/>TASK_DEADLINE_APPROACHING, USER_MENTIONED,<br/>WORKSPACE_ROLE_CHANGED, ATTACHMENT_ADDED,<br/>WORKSPACE_INVITATION_CREATED.<br/>L'unicité (event, destinataire, type) rend le<br/>rejeu d'un message strictement idempotent."
+    note for Attachment "target_type ∈ TASK, COMMENT — pointeur<br/>polymorphe. Les octets sont dans Azure Blob ;<br/>seules les MÉTADONNÉES sont en base."
+    note for EmailDelivery "status ∈ PENDING, SENT,<br/>FAILED_RETRYABLE, FAILED_PERMANENT.<br/>idempotency_key = SHA-256(eventId + type<br/>+ template + destinataire) → exactly-once."

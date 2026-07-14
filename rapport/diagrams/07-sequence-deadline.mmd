@@ -1,0 +1,38 @@
+%%{init: {'theme':'neutral'}}%%
+sequenceDiagram
+    autonumber
+    participant CR as Ordonnanceur<br/>(@Cron, task-service)
+    participant DB as tasks-db<br/>(PostgreSQL)
+    participant MQ as RabbitMQ
+    participant NO as notification-service
+    participant MY as notifications-db<br/>(MySQL)
+    participant WSK as WebSocket<br/>/ws/notifications
+    actor U as Utilisateur assigné
+
+    Note over CR: Déclenchement horaire — CronExpression.EVERY_HOUR
+
+    CR->>DB: SELECT * FROM tasks<br/>WHERE due_at BETWEEN now() AND now() + 24h<br/>AND completed_at IS NULL<br/>AND deleted_at IS NULL
+
+    DB-->>CR: Tâches dont l'échéance approche
+
+    loop Pour chaque tâche concernée
+        CR-)MQ: publish « task.deadline_approaching »<br/>{ taskId, title, dueAt,<br/>assigneeUserId, viewerUserIds[] }
+    end
+
+    MQ-)NO: Routage vers notification-service.events
+
+    NO->>NO: DomainNotificationEventMapper :<br/>1 événement → N notifications<br/>(une par destinataire)
+
+    NO->>MY: Contrôle d'idempotence<br/>(source_event_id, recipient_user_id, type)
+
+    alt Notification déjà existante
+        MY-->>NO: Doublon → ignoré silencieusement
+        Note over NO: Rejouer l'événement ne crée<br/>jamais de doublon
+    else Nouvelle notification
+        NO->>MY: INSERT notifications<br/>type = TASK_DEADLINE_APPROACHING
+        NO--)WSK: publish « notification.created »
+        WSK--)U: Trame temps réel
+        U->>U: Badge de la cloche +1<br/>« L'échéance de la tâche approche »
+    end
+
+    Note over CR,U: Le consommateur, la table, la trame WebSocket et le badge<br/>existaient déjà : seul le producteur (le cron) manquait.

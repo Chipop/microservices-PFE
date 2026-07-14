@@ -1,0 +1,47 @@
+%%{init: {'theme':'neutral'}}%%
+flowchart TB
+    subgraph ECRITURE["Chemin d'écriture — indexation pilotée par les événements"]
+        direction LR
+        SRC["task-service<br/>comment-service<br/>category-service<br/>workspace-service<br/>user-service"]
+        MQ{{"RabbitMQ<br/>flowforge.events"}}
+        LIS["search-service<br/>@RabbitListener"]
+        MAP["EventDocumentMapper<br/><i>aplatit data{} et recopie<br/>viewerUserIds / memberUserIds<br/>DANS le document</i>"]
+        SRC -- "18 clés de routage" --> MQ --> LIS --> MAP
+    end
+
+    subgraph ES["Elasticsearch 8.15 — 5 index (1 shard, 0 réplica)"]
+        direction LR
+        I1[("flowforge_tasks")]
+        I2[("flowforge_comments")]
+        I3[("flowforge_categories")]
+        I4[("flowforge_workspaces")]
+        I5[("flowforge_users")]
+    end
+
+    MAP -- "PUT /{index}/_doc/{id}<br/><i>idempotent</i>" --> ES
+
+    subgraph LECTURE["Chemin de lecture — requête filtrée par les droits"]
+        direction TB
+        Q["GET /api/search?q=release&type=task"]
+        BOOL["<b>Requête bool</b><br/><br/><b>must</b> : multi_match<br/>title^4 · username^4 · name^4<br/>description^2 · body^2 · tags<br/>type = best_fields, operator = and<br/><br/><b>filter</b> : ACL obligatoire<br/>viewerUserIds = moi<br/>OU memberUserIds = moi<br/>OU ownerUserId = moi<br/>OU authorUserId = moi<br/>OU visibility = PUBLIC"]
+        RES["Résultats normalisés<br/>{type, id, title, snippet, score}"]
+        Q --> BOOL --> RES
+    end
+
+    ES --> BOOL
+
+    NOTE["<b>Le filtre ACL est poussé DANS Elasticsearch.</b><br/>Un utilisateur ne peut pas voir dans les résultats<br/>une ressource qu'il ne pourrait pas ouvrir :<br/>le filtrage n'est jamais fait après coup côté application."]
+
+    BOOL -.-> NOTE
+
+    REIDX["<b>Reconstruction</b> — POST /api/search/internal/reindex<br/>(en-tête X-Internal-Key)<br/>Rejoue des instantanés paginés (200/page) depuis<br/>les endpoints /internal/search-snapshots<br/>de chaque service propriétaire."]
+    REIDX -.-> ES
+
+    classDef src fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef bus fill:#fef3c7,stroke:#b45309,color:#78350f
+    classDef es fill:#dcfce7,stroke:#15803d,color:#14532d
+    classDef note fill:#fee2e2,stroke:#b91c1c,color:#7f1d1d
+    class SRC,LIS,MAP src
+    class MQ bus
+    class I1,I2,I3,I4,I5 es
+    class NOTE,REIDX note
