@@ -1,0 +1,48 @@
+%%{init: {'theme':'neutral'}}%%
+sequenceDiagram
+    autonumber
+    actor U as Utilisateur
+    participant SPA as Frontend
+    participant GW as NGINX Gateway
+    participant TS as task-service
+    participant CS as category-service
+    participant WSV as workspace-service
+    participant MQ as RabbitMQ
+    participant SE as search-service
+    participant NO as notification-service
+    actor A as Assigné
+
+    rect rgb(235, 245, 255)
+    Note over U,WSV: 1 — Création d'une tâche (synchrone)
+    U->>SPA: Nouvelle tâche « Préparer la release »
+    SPA->>GW: POST /api/tasks/ (Bearer JWT)
+    GW->>TS: POST /api/tasks/
+    TS->>TS: JwtAuthGuard : vérifie HS256,<br/>extrait la revendication user_id
+    TS->>CS: GET /api/categories/{id}/permissions/me
+    CS->>WSV: GET /api/workspaces/{id}/permissions/me
+    WSV-->>CS: rôle + droits hérités
+    CS-->>TS: canContribute = true
+    TS->>TS: INSERT tasks (status='todo')<br/>+ INSERT task_activities ('task_created')
+    TS-->>SPA: 201 { id: 42, ... }
+    end
+
+    rect rgb(240, 253, 244)
+    Note over TS,SE: 2 — Indexation (asynchrone, éventuellement cohérente)
+    TS-)MQ: publish « task.created »<br/>{taskId, title, viewerUserIds[]}
+    MQ-)SE: routage par clé « task.created »
+    SE->>SE: PUT /flowforge_tasks/_doc/42<br/>(document + ACL viewerUserIds)
+    end
+
+    rect rgb(254, 249, 235)
+    Note over U,A: 3 — Assignation → notification temps réel
+    U->>SPA: Assigne la tâche à un collègue
+    SPA->>GW: POST /api/tasks/42/assignments
+    GW->>TS: POST /api/tasks/42/assignments
+    TS->>TS: INSERT task_assignments<br/>+ task_activities ('assignment_added')
+    TS-)MQ: publish « task.assigned »<br/>{taskId, assigneeUserId, assignedByUserId}
+    MQ-)NO: routage par clé « task.assigned »
+    NO->>NO: Idempotence (sourceEventId, recipient, type)<br/>INSERT notifications
+    Note over NO: L'acteur est retiré de la liste des<br/>destinataires : on ne se notifie jamais soi-même
+    NO--)A: WebSocket « notification.created »<br/>via /ws/notifications
+    A->>A: Le badge de la cloche s'incrémente
+    end

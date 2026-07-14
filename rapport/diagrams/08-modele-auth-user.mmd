@@ -1,0 +1,77 @@
+%%{init: {'theme':'neutral'}}%%
+classDiagram
+    direction LR
+
+    namespace auth-service {
+        class User["auth_app_user"] {
+            +BigAutoField id PK
+            +varchar(150) username UNIQUE
+            +varchar(254) email UNIQUE
+            +varchar(128) password
+            +bool is_active
+            +bool is_staff
+            +timestamptz email_verified_at
+            +int failed_login_count
+            +timestamptz locked_until
+            +bool two_factor_enabled
+            +varchar(64) two_factor_secret
+            +timestamptz date_joined
+            +is_locked() bool
+        }
+
+        class AuthSession["auth_app_authsession"] {
+            +BigAutoField id PK
+            +FK user_id
+            +varchar(255) refresh_jti UNIQUE
+            +inet ip_address
+            +text user_agent
+            +timestamptz expires_at
+            +timestamptz revoked_at
+            +revoke()
+        }
+
+        class AuthToken["auth_app_authtoken"] {
+            +BigAutoField id PK
+            +FK user_id
+            +varchar(32) purpose
+            +varchar(64) token_hash UNIQUE
+            +timestamptz expires_at
+            +timestamptz used_at
+            +issue(user, purpose) str
+            +mark_used()
+        }
+
+        class LoginAttempt["auth_app_loginattempt"] {
+            +BigAutoField id PK
+            +varchar(255) username
+            +FK user_id NULL
+            +inet ip_address
+            +bool successful
+            +varchar(64) failure_reason
+            +timestamptz created_at
+        }
+    }
+
+    namespace user-service {
+        class Profile["profiles_profile"] {
+            +BigAutoField id PK
+            +int auth_user_id UNIQUE
+            +varchar(150) username
+            +varchar(254) email
+            +varchar(512) profile_picture_key
+            +varchar(100) profile_picture_content_type
+            +int profile_picture_size
+            +text biography
+            +varchar(64) timezone
+            +varchar(16) language
+            +jsonb preferences
+        }
+    }
+
+    User "1" --> "0..*" AuthSession : sessions de rafraîchissement
+    User "1" --> "0..*" AuthToken : vérification / réinit.
+    User "1" --> "0..*" LoginAttempt : audit
+    User "1" ..> "1" Profile : auth_user_id<br/>(référence logique inter-bases,<br/>aucune contrainte FK)
+
+    note for AuthToken "purpose ∈ email_verification,<br/>password_reset, account_activation.<br/>Seul le HACHÉ SHA-256 est stocké :<br/>le jeton brut n'est montré qu'une fois."
+    note for Profile "Base séparée (users) : le user-service<br/>ne connaît ni les mots de passe<br/>ni les sessions."

@@ -1,0 +1,32 @@
+%%{init: {'theme':'neutral'}}%%
+sequenceDiagram
+    autonumber
+    actor U as Utilisateur
+    participant SPA as Frontend<br/>/statistics
+    participant GW as NGINX Gateway
+    participant ST as statistics-service<br/><i>sans état</i>
+    participant TS as task-service
+    participant DB as tasks-db
+
+    U->>SPA: Ouvre le tableau de bord<br/>(filtres : catégorie, statut, priorité)
+
+    SPA->>GW: GET /api/statistics/overview<br/>?workspace_id=7, category_id=3<br/>Authorization: Bearer [JWT]
+    GW->>ST: GET /api/statistics/overview
+
+    ST->>ST: JwtAuthGuard : vérifie HS256,<br/>extrait user_id ET conserve le jeton brut
+
+    Note over ST,TS: Délégation d'autorisation : le statistics-service<br/>ne réimplémente AUCUN contrôle de droits.<br/>Il rejoue le jeton de l'utilisateur et n'obtient<br/>donc que les tâches qu'il a le droit de voir.
+
+    ST->>TS: GET /api/tasks/?workspace_id=7, category_id=3<br/>Authorization: Bearer [jeton de l'utilisateur]
+    TS->>DB: SELECT ... WHERE visibilité de l'utilisateur
+    DB-->>TS: Tâches visibles
+    TS-->>ST: TaskSnapshot[]
+
+    ST->>ST: Agrégation en mémoire :<br/>• totalTasks, completedTasks<br/>• completionRate = round(c/t × 1000)/10<br/>• byStatus, byCategory, byPriority<br/>• trends (regroupement par completed_at)
+
+    ST-->>GW: 200 { totalTasks, completedTasks,<br/>completionRate, byStatus,<br/>byCategory, byPriority, trends }
+    GW-->>SPA: JSON
+
+    SPA->>U: Cartes de métriques, barres de<br/>répartition et courbe de complétion
+
+    Note over ST: Choix d'architecture : ce service ne possède AUCUNE<br/>donnée, donc AUCUNE base. Il ne duplique pas les tâches —<br/>il n'expose qu'une VUE calculée. C'est le seul service<br/>de la plateforme sans persistance, et c'est délibéré.

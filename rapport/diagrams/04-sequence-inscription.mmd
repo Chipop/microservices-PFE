@@ -1,0 +1,46 @@
+%%{init: {'theme':'neutral'}}%%
+sequenceDiagram
+    autonumber
+    actor U as Utilisateur
+    participant SPA as Frontend (Vue 3)
+    participant GW as NGINX Gateway
+    participant AU as auth-service
+    participant MQ as RabbitMQ<br/>flowforge.events
+    participant US as user-service
+    participant WS as workspace-service
+    participant EM as email-service
+
+    U->>SPA: Saisit username, email, mot de passe
+    SPA->>GW: POST /api/auth/register/
+    GW->>AU: POST /api/auth/register/
+
+    AU->>AU: Validation + hachage du mot de passe<br/>(PBKDF2, Django)
+    AU->>AU: INSERT auth_app_user
+
+    Note over AU,MQ: Publication APRÈS commit de la transaction<br/>(transaction.on_commit) — jamais d'événement<br/>pour une écriture qui a échoué
+    AU-)MQ: publish « user.registered »<br/>{userId, username, email}
+
+    AU-->>GW: 201 Created
+    GW-->>SPA: 201 Created
+    SPA->>GW: POST /api/auth/login/
+    GW-->>SPA: { access, refresh } (JWT HS256)
+    SPA->>SPA: Stocke les jetons, redirige<br/>vers /preparing-workspace
+
+    par Provisionnement asynchrone (3 consommateurs indépendants)
+        MQ-)US: user.registered
+        US->>US: INSERT profiles_profile<br/>(auth_user_id, username, email)
+    and
+        MQ-)WS: user.registered
+        WS->>WS: INSERT workspace (type PERSONAL)<br/>+ membership OWNER
+    and
+        MQ-)EM: user.registered
+        EM->>EM: Clé d'idempotence SHA-256<br/>INSERT email_deliveries
+        EM->>EM: Envoi SMTP « Bienvenue sur FlowForge »
+    end
+
+    loop Sondage toutes les 1,2 s (30 s max)
+        SPA->>GW: GET /api/profiles/ + GET /api/workspaces/
+        GW-->>SPA: profil + workspace personnel
+    end
+
+    SPA->>U: « Votre espace est prêt » → redirection /home

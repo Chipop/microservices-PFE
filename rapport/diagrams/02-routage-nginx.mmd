@@ -1,0 +1,53 @@
+%%{init: {'theme':'neutral'}}%%
+flowchart LR
+    C(["Client<br/>http://localhost:8080"])
+
+    subgraph NGINX["API Gateway — NGINX (conteneur api-gateway, port 80 → 8080)"]
+        direction TB
+        R1["/"]
+        R2["/api/auth/"]
+        R3["/api/profiles/"]
+        R4["/api/tasks/"]
+        R5["/api/categories/"]
+        R6["/api/comments/"]
+        R7["/api/statistics/"]
+        R8["/api/workspaces/"]
+        R9["/api/attachments/"]
+        R10["/api/notifications/"]
+        R11["/ws/notifications"]
+        R12["/api/search/"]
+    end
+
+    F["frontend:9000<br/><i>SPA Vue 3 (static)</i>"]
+    S2["auth-service:8000"]
+    S3["user-service:8000"]
+    S4["task-service:8000"]
+    S5["category-service:8000"]
+    S6["comment-service:8000"]
+    S7["statistics-service:8000"]
+    S8["workspace-service:8000"]
+    S9["attachment-service:8000"]
+    S10["notification-service:8000"]
+    S12["search-service:8000"]
+
+    C --> NGINX
+
+    R1  --> F
+    R2  --> S2
+    R3  --> S3
+    R4  --> S4
+    R5  --> S5
+    R6  --> S6
+    R7  --> S7
+    R8  --> S8
+    R9  --> S9
+    R10 --> S10
+    R11 -- "Upgrade: websocket" --> S10
+    R12 --> S12
+
+    classDef route fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
+    classDef svc fill:#f1f5f9,stroke:#64748b,color:#334155
+    classDef spa fill:#ede9fe,stroke:#6d28d9,color:#4c1d95
+    class R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12 route
+    class S2,S3,S4,S5,S6,S7,S8,S9,S10,S12 svc
+    class F spa
