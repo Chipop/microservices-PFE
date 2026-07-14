@@ -197,20 +197,30 @@
 % =============================================================================
 
 % --- Encadré « point clé » ----------------------------------------------------
+% Le bandeau de titre est rempli en BLEU FONCÉ : le texte du titre doit donc
+% être BLANC. Le corps, lui, reste sur fond clair avec du texte foncé.
 \newtcolorbox{pointcle}[1][]{
-  enhanced, breakable, colback=ffbg, colframe=ffblue,
+  enhanced, breakable,
+  colback=ffbg, colframe=ffblue,
+  colbacktitle=ffblue,          % fond du bandeau de titre
+  coltitle=white,               % texte du titre : BLANC (lisible)
+  fonttitle=\bfseries,
+  coltext=ffdark,               % texte du corps : foncé sur fond clair
   boxrule=0pt, leftrule=3pt, arc=1pt,
-  fonttitle=\bfseries\color{ffdark},
-  coltitle=ffdark, title={#1},
+  title={#1},
   left=8pt, right=8pt, top=6pt, bottom=6pt
 }
 
 % --- Encadré « choix d'architecture » ----------------------------------------
 \newtcolorbox{choix}[1][]{
-  enhanced, breakable, colback=white, colframe=ffgreen,
+  enhanced, breakable,
+  colback=white, colframe=ffgreen,
+  colbacktitle=ffgreen,         % fond du bandeau de titre
+  coltitle=white,               % texte du titre : BLANC (lisible)
+  fonttitle=\bfseries,
+  coltext=black,                % texte du corps : noir sur fond blanc
   boxrule=0pt, leftrule=3pt, arc=1pt,
-  fonttitle=\bfseries\color{ffgreen},
-  coltitle=ffgreen, title={#1},
+  title={#1},
   left=8pt, right=8pt, top=6pt, bottom=6pt
 }
 
