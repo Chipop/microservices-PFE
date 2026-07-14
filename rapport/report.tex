@@ -487,7 +487,10 @@ Tous les services conteneurisés & \textbf{Oui} &
   19 conteneurs orchestrés par un unique \code{docker-compose.yml}. \\
 \addlinespace
 Reverse proxy pour chaque service & \textbf{Oui} &
-  Un bloc \code{location} par microservice backend. \\
+  Un bloc \code{location} par microservice exposant une API HTTP.
+  Seul l'\code{email-service} n'en a pas : il n'expose \emph{aucune} route
+  publique et n'est piloté que par les événements RabbitMQ. Lui ouvrir une
+  porte sur la passerelle aurait été une surface d'attaque gratuite. \\
 \bottomrule
 \end{tabularx}
 \caption{Conformité aux contraintes techniques obligatoires}
@@ -539,12 +542,28 @@ La figure~\ref{fig:archi} présente l'architecture complète : le frontend, la
 passerelle NGINX, les onze microservices, les trois SGBD et les flux de
 communication (synchrones en trait plein, asynchrones en pointillés).
 
-\mermaidfig{01-architecture-globale}{Architecture globale de la plateforme \projet}{archi}{1.0}
+\mermaidfig{01-architecture-globale}{Architecture globale de la plateforme \projet{} — une base de données dédiée par service}{archi}{1.0}
 
 Le navigateur ne connaît qu'une seule adresse : \code{http://localhost:8080}.
 NGINX y sert la SPA depuis la racine et relaie chaque préfixe \code{/api/...}
 vers le microservice compétent. Aucun service backend n'est joignable
 directement depuis l'extérieur du réseau Docker.
+
+\begin{pointcle}[Aucune base n'est partagée]
+La figure~\ref{fig:archi} se lit ainsi : \textbf{à chaque service correspond
+exactement une flèche, vers exactement une base}. Il n'existe nulle part une
+base commune sur laquelle deux services viendraient se brancher. Sept services
+possèdent leur propre instance PostgreSQL, deux possèdent leur propre instance
+MySQL, le \code{search-service} possède son cluster Elasticsearch — et le
+\code{statistics-service} n'a \emph{aucune} base, parce qu'il ne détient aucune
+donnée.
+
+Concrètement, cela signifie qu'aucun service ne peut lire ni écrire dans les
+tables d'un autre : la seule façon d'obtenir une donnée qui ne vous appartient
+pas est de la \emph{demander} (appel HTTP) ou de l'\emph{apprendre} (événement
+RabbitMQ). C'est contraignant à écrire, mais c'est ce qui garantit qu'un
+changement de schéma dans un service ne casse jamais un autre service.
+\end{pointcle}
 
 \section{Routage de la passerelle}
 

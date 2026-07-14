@@ -1,34 +1,56 @@
-%%{init: {'theme':'neutral', 'flowchart': {'curve':'basis', 'nodeSpacing':22, 'rankSpacing':90}}}%%
+%%{init: {'theme':'neutral', 'flowchart': {'curve':'basis', 'nodeSpacing':16, 'rankSpacing':85}}}%%
 flowchart LR
     SPA["<b>Frontend SPA</b><br/>Vue 3 · TypeScript<br/>Vite · Pinia<br/><br/><i>servi depuis /<br/>par la passerelle</i>"]
 
     GW["<b>API GATEWAY</b><br/><b>NGINX</b> — port 8080<br/><br/><i>point d'entrée<br/>public unique</i><br/><i>reverse proxy de<br/>chaque microservice</i>"]
 
-    AUTH["<b>1 · auth-service</b><br/>Django 5.2 + DRF<br/><i>(exigé)</i>"]
-    USER["<b>2 · user-service</b><br/>Django 5.2 + DRF<br/><i>(exigé)</i>"]
-    TASK["<b>3 · task-service</b><br/>NestJS 11 + TypeORM<br/><i>(exigé — TODO)</i>"]
-    CAT["<b>4 · category-service</b><br/>NestJS 11 + TypeORM<br/><i>(exigé)</i>"]
-    COM["<b>5 · comment-service</b><br/>NestJS 11 + TypeORM<br/><i>(exigé)</i>"]
-    STAT["<b>6 · statistics-service</b><br/>NestJS 11 — sans état<br/><i>(exigé)</i>"]
-    NOTIF["<b>7 · notification-service</b><br/>Spring Boot 3.4<br/><i>(BONUS)</i>"]
+    %% ---- Services du périmètre exigé -------------------------------------
+    AUTH["<b>1 · auth-service</b><br/>Django 5.2 + DRF"]
+    USER["<b>2 · user-service</b><br/>Django 5.2 + DRF"]
+    TASK["<b>3 · task-service</b><br/>NestJS 11 + TypeORM"]
+    CAT["<b>4 · category-service</b><br/>NestJS 11 + TypeORM"]
+    COM["<b>5 · comment-service</b><br/>NestJS 11 + TypeORM"]
+    STAT["<b>6 · statistics-service</b><br/>NestJS 11"]
+    NOTIF["<b>7 · notification-service</b><br/>Spring Boot 3.4 · BONUS"]
 
-    WS["<b>workspace-service</b><br/>Spring Boot 3.4<br/><i>(hors périmètre)</i>"]
-    ATT["<b>attachment-service</b><br/>Spring Boot 3.4<br/><i>(hors périmètre)</i>"]
-    MAIL["<b>email-service</b><br/>Spring Boot 3.4<br/><i>(hors périmètre)</i>"]
-    SEARCH["<b>search-service</b><br/>Spring Boot 3.4<br/><i>(hors périmètre)</i>"]
+    %% ---- Services hors périmètre -----------------------------------------
+    WS["<b>workspace-service</b><br/>Spring Boot 3.4"]
+    ATT["<b>attachment-service</b><br/>Spring Boot 3.4"]
+    MAIL["<b>email-service</b><br/>Spring Boot 3.4"]
+    SEARCH["<b>search-service</b><br/>Spring Boot 3.4"]
 
-    PG[("<b>PostgreSQL 16</b><br/>7 bases dédiées<br/>auth · users · tasks<br/>categories · comments<br/>workspaces · attachments")]
-    MY[("<b>MySQL 8</b><br/>2 bases dédiées<br/>notifications · emails")]
-    ES[("<b>Elasticsearch 8.15</b><br/>5 index")]
+    %% ---- UNE BASE DÉDIÉE PAR SERVICE — aucune base n'est partagée ---------
+    DBAUTH[("<b>auth-db</b><br/>PostgreSQL 16<br/>base <i>auth</i>")]
+    DBUSER[("<b>users-db</b><br/>PostgreSQL 16<br/>base <i>users</i>")]
+    DBTASK[("<b>tasks-db</b><br/>PostgreSQL 16<br/>base <i>tasks</i>")]
+    DBCAT[("<b>categories-db</b><br/>PostgreSQL 16<br/>base <i>categories</i>")]
+    DBCOM[("<b>comments-db</b><br/>PostgreSQL 16<br/>base <i>comments</i>")]
+    DBWS[("<b>workspaces-db</b><br/>PostgreSQL 16<br/>base <i>workspaces</i>")]
+    DBATT[("<b>attachments-db</b><br/>PostgreSQL 16<br/>base <i>attachments</i>")]
+    DBNOTIF[("<b>notifications-db</b><br/><b>MySQL 8</b><br/>base <i>notifications</i>")]
+    DBMAIL[("<b>emails-db</b><br/><b>MySQL 8</b><br/>base <i>emails</i>")]
+    DBES[("<b>elasticsearch</b><br/>Elasticsearch 8.15<br/>5 index")]
+    NODB(["<i>aucune base :<br/>ne possède<br/>aucune donnée</i>"])
+
     BUS{{"<b>RabbitMQ 4.3</b><br/>exchange topic<br/>« flowforge.events »<br/><br/><i>flux détaillés : figure 6</i>"}}
     SMTP>"<b>SMTP</b><br/>externe"]
 
     SPA ==> GW
     GW ==> AUTH & USER & TASK & CAT & COM & STAT & NOTIF & WS & ATT & SEARCH
 
-    AUTH & USER & TASK & CAT & COM & WS & ATT --> PG
-    NOTIF & MAIL --> MY
-    SEARCH --> ES
+    %% Chaque service possède SA base, et ELLE SEULE : 1 flèche, 1 base.
+    AUTH --> DBAUTH
+    USER --> DBUSER
+    TASK --> DBTASK
+    CAT --> DBCAT
+    COM --> DBCOM
+    WS --> DBWS
+    ATT --> DBATT
+    NOTIF --> DBNOTIF
+    MAIL --> DBMAIL
+    SEARCH --> DBES
+    STAT -.-> NODB
+
     MAIL --> SMTP
 
     AUTH & USER & TASK & CAT & COM & NOTIF & WS & ATT & MAIL & SEARCH -.-> BUS
@@ -40,7 +62,10 @@ flowchart LR
     classDef core fill:#dbeafe,stroke:#1d4ed8,color:#1e3a8a
     classDef bonus fill:#c7d2fe,stroke:#4338ca,color:#312e81,font-weight:bold
     classDef extra fill:#f1f5f9,stroke:#94a3b8,color:#475569
-    classDef store fill:#dcfce7,stroke:#15803d,color:#14532d
+    classDef pgdb fill:#dcfce7,stroke:#15803d,color:#14532d
+    classDef mydb fill:#ffedd5,stroke:#c2410c,color:#7c2d12,font-weight:bold
+    classDef esdb fill:#e0e7ff,stroke:#4338ca,color:#312e81
+    classDef nodb fill:#ffffff,stroke:#94a3b8,color:#64748b,stroke-dasharray:4 3
     classDef bus fill:#fef3c7,stroke:#b45309,color:#78350f,font-weight:bold
     classDef spa fill:#ede9fe,stroke:#6d28d9,color:#4c1d95
 
@@ -48,6 +73,9 @@ flowchart LR
     class AUTH,USER,TASK,CAT,COM,STAT core
     class NOTIF bonus
     class WS,ATT,MAIL,SEARCH extra
-    class PG,MY,ES store
+    class DBAUTH,DBUSER,DBTASK,DBCAT,DBCOM,DBWS,DBATT pgdb
+    class DBNOTIF,DBMAIL mydb
+    class DBES esdb
+    class NODB nodb
     class BUS,SMTP bus
     class SPA spa
