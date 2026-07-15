@@ -149,6 +149,20 @@ export interface CategoryDto {
   updated_at: string
 }
 
+export type CategoryRoleDto = 'CATEGORY_OWNER' | 'CATEGORY_ADMIN' | 'CONTRIBUTOR' | 'VIEWER'
+
+export interface CategoryMemberDto {
+  id: number
+  category_id: number
+  user_id: number
+  role: CategoryRoleDto
+  added_by_user_id: number
+  removed_at: string | null
+  removed_by_user_id: number | null
+  created_at: string
+  updated_at: string
+}
+
 export type TaskStatusDto = 'backlog' | 'todo' | 'in_progress' | 'review' | 'done' | 'archived'
 
 export interface KanbanColumnDto {
@@ -471,6 +485,9 @@ export const categoriesApi = {
   },
   create(input: { workspace_id: number; name: string; description?: string }) {
     return request<CategoryDto>(`${API_BASES.categories}/`, { method: 'POST', body: input })
+  },
+  members(id: number) {
+    return request<CategoryMemberDto[]>(`${API_BASES.categories}/${id}/members`)
   },
   update(id: number, input: Partial<{ name: string; description: string }>) {
     return request<CategoryDto>(`${API_BASES.categories}/${id}`, { method: 'PATCH', body: input })

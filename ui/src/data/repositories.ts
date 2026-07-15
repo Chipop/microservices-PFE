@@ -2,6 +2,7 @@ import type {
   CreateTaskInput,
   Notification,
   Category,
+  CategoryMember,
   Task,
   TaskPermissions,
   User,
@@ -100,6 +101,23 @@ export const categoryRepository = {
       description: input.description ?? '',
     })
     return categoryToView(category, currentUser())
+  },
+  async members(categoryId: string): Promise<CategoryMember[]> {
+    const members = await categoriesApi.members(toNumberId(categoryId))
+    const memberIds = members.map(member => member.user_id)
+    const profiles = memberIds.length ? await profilesApi.resolveByAuthIds(memberIds).catch(() => []) : []
+    const profilesByAuthId = new Map(profiles.map(profile => [profile.auth_user_id, profile]))
+    return members.map(member => {
+      const profile = profilesByAuthId.get(member.user_id)
+      const user = profile
+        ? profileToUser(profile, member.user_id)
+        : userStub(member.user_id)
+      return {
+        ...user,
+        role: member.role,
+        joinedAt: formatMemberDate(member.created_at),
+      }
+    })
   },
 }
 
@@ -205,6 +223,11 @@ async function loadPermissions(taskId: string): Promise<TaskPermissions | undefi
 function userStub(id: number): User {
   const name = `User ${id}`
   return { id: String(id), name, username: `user-${id}`, email: '', initials: `U${id}` }
+}
+
+function formatMemberDate(value?: string | null) {
+  if (!value) return ''
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value))
 }
 
 export const notificationRepository = {
