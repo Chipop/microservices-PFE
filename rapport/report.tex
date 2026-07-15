@@ -80,8 +80,13 @@
 % ---------- En-têtes / pieds de page -----------------------------------------
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\small\textcolor{ffgray}{\projet{} -- \soustitre}}
-\fancyhead[R]{\small\textcolor{ffgray}{\leftmark}}
+% En-tête : nom du projet à gauche, titre du chapitre courant à droite.
+% Le sous-titre a été retiré de l'en-tête : à gauche « FlowForge — Plateforme
+% collaborative... » et à droite le titre de chapitre étaient tous deux longs et
+% se chevauchaient au milieu de la ligne. \nouppercase évite l'affichage en
+% capitales du \leftmark, plus compact et lisible.
+\fancyhead[L]{\small\textcolor{ffgray}{\projet}}
+\fancyhead[R]{\small\textcolor{ffgray}{\nouppercase{\leftmark}}}
 \fancyfoot[C]{\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
 \renewcommand{\footrulewidth}{0pt}
