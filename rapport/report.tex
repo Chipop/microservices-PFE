@@ -890,6 +890,47 @@ mots de passe ni les sessions — cette séparation est volontaire : le service 
 plus exposé fonctionnellement (celui qu'on modifie le plus souvent) est aussi
 celui qui manipule le moins de données sensibles.
 
+\subsection{Pile technique}
+
+Django~5.2 avec Django REST Framework, comme l'auth-service — mais sur une base
+\emph{séparée}. Le choix d'un second service Django plutôt qu'une simple
+application supplémentaire dans l'auth-service est délibéré : profils et
+authentification ont des cycles de vie, des besoins de mise à l'échelle et des
+niveaux de sensibilité différents. La publication et la consommation d'événements
+s'appuient sur la bibliothèque \code{pika}.
+
+\subsection{Structure du projet}
+
+\begin{lstlisting}[language=bash,numbers=none]
+server/user-service/
+  users_django/           # configuration du projet Django
+    settings.py           #   BD, stockage Azure, RabbitMQ
+    cors.py               #   middleware CORS ecrit a la main
+  profiles/
+    models.py             #   Profile
+    serializers.py        #   validation des entrees (DRF)
+    services.py           #   logique metier (photo, preferences)
+    views.py              #   points d'entree HTTP
+    storage.py            #   depot des photos vers Azure Blob
+    events.py             #   publication RabbitMQ (user.profile.*)
+    management/commands/
+      consume_events.py   #   CONSOMMATEUR de user.registered
+    migrations/
+  entrypoint.sh           # lance le serveur HTTP + le consommateur
+  Dockerfile
+\end{lstlisting}
+
+\subsection{Modèle de données}
+
+Une seule table, \code{profiles\_profile} (voir aussi la
+figure~\ref{fig:modele-auth}). Le champ pivot est \code{auth\_user\_id} : c'est
+la copie de l'identifiant émis par l'auth-service, sans contrainte de clé
+étrangère puisqu'il pointe vers une \emph{autre} base. Les autres colonnes sont
+purement descriptives : \code{username}, \code{email}, \code{biography},
+\code{timezone}, \code{language}, \code{preferences} (JSON libre) et les
+métadonnées de la photo (\code{profile\_picture\_key} désigne l'objet stocké
+dans Azure Blob, pas les octets eux-mêmes).
+
 \subsection{Particularité : provisionnement automatique par événement}
 
 Le profil n'est pas créé par un appel HTTP depuis l'auth-service : il est créé
@@ -986,6 +1027,32 @@ app.useGlobalPipes(new ValidationPipe({
 \code{forbidNonWhitelisted} est un choix de sécurité : un client qui tenterait
 d'injecter un champ non prévu (\code{"owner\_user\_id": 1}) reçoit une erreur
 400 au lieu de voir son champ silencieusement ignoré.
+
+\subsection{Structure du projet}
+
+C'est le service le plus riche : son domaine est découpé en modules NestJS
+distincts (tâches, statuts, colonnes kanban, filtres enregistrés), chacun avec
+son contrôleur et son service.
+
+\begin{lstlisting}[language=bash,numbers=none]
+server/task-service/
+  src/
+    main.ts                 # amorcage, ValidationPipe globale, CORS
+    app.module.ts           # assemblage des modules + TypeORM
+    auth/
+      jwt-auth.guard.ts      #   validation locale du JWT (HS256)
+      current-user.decorator.ts
+    tasks/
+      tasks.controller.ts    #   ~30 routes (taches + collaboration)
+      tasks.service.ts       #   logique metier
+      deadline-scanner.service.ts  #   cron des echeances (bonus)
+      dto/task.dto.ts        #   DTO valides par class-validator
+      entities/              #   Task, Subtask, Tag, Assignment...
+    events/
+      domain-event.publisher.ts    #   publication RabbitMQ (task.*)
+    migrations/              # migrations TypeORM
+  Dockerfile
+\end{lstlisting}
 
 \subsection{Modèle de données}
 
@@ -1132,9 +1199,48 @@ Il possède les catégories (Travail, Personnel, Urgent…), leurs membres, leur
 rôles et leurs invitations. Une tâche appartient à une catégorie ; une catégorie
 appartient à un espace de travail.
 
+\subsection{Pile technique}
+
+NestJS~11 avec TypeORM, comme le task-service et le comment-service. Les trois
+services NestJS partagent volontairement la même ossature (module \code{auth}
+avec le \emph{guard} JWT, module \code{events} avec le publieur RabbitMQ,
+\code{ValidationPipe} globale), ce qui rend le code prévisible d'un service à
+l'autre. La particularité du category-service est qu'il ne prend \emph{aucune}
+décision d'autorisation seul : il appelle le workspace-service en HTTP pour
+connaître les droits hérités (voir l'extrait plus bas).
+
+\subsection{Structure du projet}
+
+\begin{lstlisting}[language=bash,numbers=none]
+server/category-service/
+  src/
+    main.ts                 # amorcage, ValidationPipe globale, CORS
+    app.module.ts           # assemblage + TypeORM (base categories)
+    auth/
+      jwt-auth.guard.ts      #   validation locale du JWT (HS256)
+      current-user.decorator.ts
+    categories/
+      categories.controller.ts   #   CRUD + membres + invitations
+      categories.service.ts      #   logique metier + droits herites
+      dto/category.dto.ts
+      entities/category.entity.ts  #   Category, CategoryMember,
+                                   #   CategoryInvitation (3 entites)
+    events/
+      domain-event.publisher.ts    #   publication RabbitMQ (category.*)
+  Dockerfile
+\end{lstlisting}
+
 \subsection{Modèle de données}
 
 \mermaidfig{10-modele-category-comment}{Modèle de données des services Category et Comment}{modele-cat}{0.95}
+
+Trois tables : \code{categories}, \code{category\_members} (adhésions explicites
+avec un rôle) et \code{category\_invitations} (invitations par jeton). Comme
+partout, il n'y a aucune clé étrangère vers les autres services :
+\code{workspace\_id}, \code{owner\_user\_id} et \code{author\_user\_id} sont de
+simples entiers. On notera le champ \code{workspace\_name\_snapshot} :
+c'est une \emph{copie} du nom de l'espace de travail au moment de la création,
+qui évite un appel réseau à chaque affichage — une dénormalisation assumée.
 
 \subsection{Points d'entrée exposés}
 
@@ -1236,6 +1342,36 @@ Le coût est un appel HTTP supplémentaire ; le bénéfice est qu'il n'existe qu
 seul endroit au monde où la règle de visibilité d'une tâche est écrite. Elle ne
 peut donc pas diverger.
 \end{choix}
+
+\subsection{Pile technique}
+
+NestJS~11 avec TypeORM, sur sa propre base \code{comments}. Ce service a été
+\emph{extrait} du task-service : les commentaires y étaient auparavant un module
+interne. Les isoler dans un service dédié, avec sa propre base, permet de les
+faire évoluer (et monter en charge) indépendamment des tâches.
+
+\subsection{Structure du projet}
+
+C'est le plus petit des services NestJS — la meilleure preuve qu'un microservice
+peut rester minuscule quand son périmètre est étroit.
+
+\begin{lstlisting}[language=bash,numbers=none]
+server/comment-service/
+  src/
+    main.ts                 # amorcage, ValidationPipe globale, CORS
+    app.module.ts           # assemblage + TypeORM (base comments)
+    auth/
+      jwt-auth.guard.ts      #   validation locale du JWT (HS256)
+      current-user.decorator.ts
+    comments/
+      comments.controller.ts     #   5 routes CRUD
+      comments.service.ts        #   appelle task-service pour les droits
+      dto/comment.dto.ts
+      entities/comment.entity.ts #   une seule entite
+    events/
+      domain-event.publisher.ts  #   publication RabbitMQ (task.comment.*)
+  Dockerfile
+\end{lstlisting}
 
 \subsection{Modèle de données}
 
@@ -1348,6 +1484,34 @@ private async publish(eventType: string, comment: Comment,
 Il calcule les métriques de productivité : taux de complétion, totaux,
 répartitions par statut, catégorie et priorité, et tendance de complétion.
 
+\subsection{Pile technique}
+
+NestJS~11, mais \emph{sans} TypeORM ni base : c'est le seul service NestJS
+réduit à un contrôleur, un service métier et le \emph{guard} JWT. Il ne conserve
+que le module \code{auth} commun aux autres services NestJS ; tout le reste
+(entités, dépôts, publieur d'événements) est absent, parce qu'inutile.
+
+\subsection{Structure du projet}
+
+\begin{lstlisting}[language=bash,numbers=none]
+server/statistics-service/
+  src/
+    main.ts                 # amorcage, CORS
+    app.module.ts           # AUCUN TypeOrmModule -- pas de base
+    auth/
+      jwt-auth.guard.ts      #   validation locale du JWT (HS256)
+      current-user.decorator.ts
+    statistics/
+      statistics.controller.ts   #   une seule route : /overview
+      statistics.service.ts      #   appel task-service + agregation
+  Dockerfile
+\end{lstlisting}
+
+\subsection{Modèle de données}
+
+\textbf{Aucun.} Ce service ne possède ni table, ni base de données — c'est
+assumé et central à sa conception. L'encadré ci-dessous explique pourquoi.
+
 \begin{choix}[Le seul service sans base de données — et c'est délibéré]
 Un service de statistiques n'a besoin d'aucune donnée \emph{qui lui soit
 propre} : il ne fait que \emph{regarder} celles des autres. Lui donner une base
@@ -1447,7 +1611,52 @@ les pousse en temps réel dans l'interface.
 \subsection{Pile technique}
 
 Spring Boot~3.4 / Java~21, \textbf{MySQL~8}, WebSocket natif Spring, consommation
-RabbitMQ via Spring AMQP.
+RabbitMQ via Spring AMQP. Le choix de Spring pour ce service tient à ses briques
+intégrées : \code{spring-boot-starter-websocket} pour le temps réel,
+Spring AMQP pour la consommation d'événements avec réessais, et Flyway pour le
+versionnement du schéma MySQL.
+
+\subsection{Structure du projet}
+
+Le code est organisé par responsabilité technique (\emph{package by layer}),
+convention idiomatique de Spring Boot.
+
+\begin{lstlisting}[language=bash,numbers=none]
+server/notification-service/src/main/
+  java/com/flowforge/notification/
+    config/
+      RabbitEventConfig.java     # file durable + DLQ + reessais
+      SecurityConfig.java        # validation JWT
+    controller/
+      NotificationController.java  # 5 routes REST
+    event/
+      RabbitNotificationEventListener.java  # @RabbitListener
+      DomainNotificationEventMapper.java    # 1 evenement -> N notifs
+    model/
+      Notification.java          # entite JPA
+      NotificationType.java      # enumeration des types
+    repository/
+      NotificationRepository.java
+    service/
+      NotificationService.java   # creation idempotente
+    websocket/
+      NotificationWebSocketHandler.java    # socket authentifiee par JWT
+      NotificationWebSocketPublisher.java  # push temps reel
+  resources/
+    application.yml
+    db/migration/                # scripts Flyway (schema MySQL)
+\end{lstlisting}
+
+\subsection{Modèle de données}
+
+Une seule table, \code{notifications} (détaillée sur la
+figure~\ref{fig:modele-ws}), sur MySQL~8. La colonne décisive est la contrainte
+d'unicité \code{(source\_event\_id, recipient\_user\_id, type)} : c'est elle qui
+rend la création idempotente et absorbe les redistributions de RabbitMQ (voir
+l'extrait plus bas). Les champs \code{related\_resource\_id} et
+\code{related\_resource\_type} forment un pointeur polymorphe vers la ressource
+d'origine (une tâche, un espace de travail…), et \code{deleted\_at} matérialise
+la suppression logique.
 
 \subsection{Détection des échéances}
 
