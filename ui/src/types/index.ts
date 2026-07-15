@@ -1,6 +1,7 @@
 export type Priority = 'Highest' | 'High' | 'Medium' | 'Low'
 export type TaskStatus = 'Backlog' | 'To do' | 'In progress' | 'Review' | 'Done'
 export type WorkspaceRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER'
+export type CategoryRole = 'CATEGORY_OWNER' | 'CATEGORY_ADMIN' | 'CONTRIBUTOR' | 'VIEWER'
 
 export interface User {
   id: string
@@ -8,11 +9,11 @@ export interface User {
   username: string
   email: string
   initials: string
-  role?: WorkspaceRole
   avatar?: string
 }
 
 export type WorkspaceMember = User & { role: WorkspaceRole }
+export type CategoryMember = User & { role: CategoryRole; joinedAt: string }
 
 export interface Workspace {
   id: string
