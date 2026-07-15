@@ -80,7 +80,7 @@
 % ---------- En-têtes / pieds de page -----------------------------------------
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\small\textcolor{ffgray}{\projet{} — \soustitre}}
+\fancyhead[L]{\small\textcolor{ffgray}{\projet{} -- \soustitre}}
 \fancyhead[R]{\small\textcolor{ffgray}{\leftmark}}
 \fancyfoot[C]{\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
@@ -1986,33 +1986,29 @@ sessions en base (voir \code{AuthSession}).}{sessions}
 
 \section{Espaces de travail}
 
-\capture{22-workspaces}{\textbf{Liste des espaces de travail.} L'espace
-personnel a été créé automatiquement à l'inscription par le
-\code{workspace-service}, en réaction à \code{user.registered}.}{workspaces}
-
-\capture{23-workspace-settings}{\textbf{Paramètres d'un espace de travail.}
+\capture{22-workspace-settings}{\textbf{Paramètres d'un espace de travail.}
 Écran réservé aux rôles \code{OWNER} et \code{ADMIN} : visibilité, gestion des
 membres, changement de rôle, invitations, archivage.}{wssettings}
 
 \section{Infrastructure}
 
-\capture{24-rabbitmq}{\textbf{Console d'administration RabbitMQ}
+\capture{23-rabbitmq}{\textbf{Console d'administration RabbitMQ}
 (\code{localhost:15672}). On y voit l'exchange \code{flowforge.events}, les cinq
 files de consommateurs et leurs files de rebut associées, ainsi que le débit de
 messages.}{rabbitmq}
 
-\capture{25-elasticsearch}{\textbf{Index Elasticsearch} (\code{localhost:9200}).
+\capture{24-elasticsearch}{\textbf{Index Elasticsearch} (\code{localhost:9200}).
 Les cinq index (\code{flowforge\_tasks}, \code{flowforge\_comments},
 \code{flowforge\_categories}, \code{flowforge\_workspaces},
 \code{flowforge\_users}) et le nombre de documents indexés.}{elastic}
 
-\capture{26-welcome-email}{\textbf{Email de bienvenue.} Envoyé par
+\capture{25-welcome-email}{\textbf{Email de bienvenue.} Envoyé par
 l'\code{email-service} en réaction à \code{user.registered}, à partir d'un
 gabarit HTML. Chaque envoi est journalisé dans la table \code{email\_deliveries}
 sous une clé d'idempotence, ce qui garantit qu'un même email n'est jamais envoyé
 deux fois.}{email}
 
-\capture{27-docker-ps}{\textbf{Conteneurs en cours d'exécution}
+\capture{26-docker-ps}{\textbf{Conteneurs en cours d'exécution}
 (\code{docker compose ps}). Les 19 conteneurs de la plateforme : 11 services,
 9 bases, RabbitMQ, Elasticsearch, la passerelle et le frontend.}{docker}
 
