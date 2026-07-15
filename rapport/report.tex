@@ -507,6 +507,13 @@ Frontend via la passerelle uniquement & \textbf{Oui} &
   Le conteneur \code{frontend} ne publie aucun port : il n'est joignable que
   par NGINX. \\
 \addlinespace
+Accès aux services via la passerelle uniquement & \textbf{Oui} &
+  \textbf{Aucun} microservice backend ni aucune base ne publie de port sur
+  l'hôte (pas de section \code{ports:}). Ils communiquent par le réseau interne
+  Docker ; seuls 3 ports sont publiés : la passerelle (8080) et les deux
+  consoles d'infrastructure (RabbitMQ 15672, Elasticsearch 9200). Un
+  \code{curl localhost:8003} échoue. \\
+\addlinespace
 Frontend servi depuis la racine \code{/} & \textbf{Oui} &
   \code{location / \{ proxy\_pass http://frontend\_app; \}} (annexe~\ref{ann:nginx}). \\
 \addlinespace
@@ -684,20 +691,22 @@ exposés et un extrait de code commenté représentatif.
 \begin{table}[H]
 \centering
 \small
-\begin{tabularx}{\linewidth}{@{}p{3.4cm}p{3.3cm}p{2.4cm}X@{}}
+\begin{tabularx}{\linewidth}{@{}p{3.2cm}p{3.2cm}p{3.1cm}X@{}}
 \toprule
-\textbf{Service} & \textbf{Pile} & \textbf{Port} & \textbf{Persistance} \\
+\textbf{Service} & \textbf{Pile} & \textbf{Route passerelle} & \textbf{Persistance} \\
 \midrule
-\code{auth-service}         & Django 5.2 + DRF       & 8002 & PostgreSQL \code{auth} \\
-\code{user-service}         & Django 5.2 + DRF       & 8001 & PostgreSQL \code{users} \\
-\code{task-service}         & NestJS 11 + TypeORM    & 8003 & PostgreSQL \code{tasks} \\
-\code{category-service}     & NestJS 11 + TypeORM    & 8009 & PostgreSQL \code{categories} \\
-\code{comment-service}      & NestJS 11 + TypeORM    & 8010 & PostgreSQL \code{comments} \\
-\code{statistics-service}   & NestJS 11              & 8011 & \emph{aucune} \\
-\code{notification-service} & Spring Boot 3.4 / Java 21 & 8006 & MySQL \code{notifications} \\
+\code{auth-service}         & Django 5.2 + DRF       & \code{/api/auth/}       & PostgreSQL \code{auth} \\
+\code{user-service}         & Django 5.2 + DRF       & \code{/api/profiles/}   & PostgreSQL \code{users} \\
+\code{task-service}         & NestJS 11 + TypeORM    & \code{/api/tasks/}      & PostgreSQL \code{tasks} \\
+\code{category-service}     & NestJS 11 + TypeORM    & \code{/api/categories/} & PostgreSQL \code{categories} \\
+\code{comment-service}      & NestJS 11 + TypeORM    & \code{/api/comments/}   & PostgreSQL \code{comments} \\
+\code{statistics-service}   & NestJS 11              & \code{/api/statistics/} & \emph{aucune} \\
+\code{notification-service} & Spring Boot 3.4 / Java 21 & \code{/api/notifications/} & MySQL \code{notifications} \\
 \bottomrule
 \end{tabularx}
-\caption{Piles techniques des services du périmètre exigé}
+\caption{Piles techniques des services du périmètre exigé. Tous écoutent en
+interne sur le port~8000 et ne sont atteignables que par leur route à travers la
+passerelle — aucun port direct n'est publié sur l'hôte.}
 \end{table}
 
 % -----------------------------------------------------------------------------

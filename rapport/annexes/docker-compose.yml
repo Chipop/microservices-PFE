@@ -7,7 +7,7 @@
 #    -  9 bases de donnees dediees (7 PostgreSQL + 2 MySQL)
 #    -  1 courtier de messages RabbitMQ (bus d'evenements)
 #    -  1 moteur Elasticsearch (index de recherche)
-#    -  1 passerelle NGINX (unique port expose : 8080)
+#    -  1 passerelle NGINX (unique port applicatif expose : 8080)
 #    -  1 frontend SPA (servi PAR la passerelle, aucun port propre)
 #
 #  Principes d'architecture appliques ici :
@@ -21,13 +21,28 @@
 #    (notifications, emails), qui sont en ecriture-ajout et sans jointure.
 #    Elasticsearch constitue un troisieme magasin, dedie a la recherche.
 #
-#  * UN SEUL PORT PUBLIC — seule la passerelle (8080) est destinee au
-#    navigateur. Les ports des services et des bases ne sont publies que pour
-#    faciliter le debogage local ; en production ils seraient supprimes.
+#  * ACCES UNIQUEMENT PAR LA PASSERELLE — c'est le point important. AUCUN
+#    microservice backend et AUCUNE base de donnees ne publie de port sur
+#    l'hote : ils n'ont PAS de section `ports:`. Ils restent joignables par
+#    NGINX et entre eux via le reseau interne Docker (la communication entre
+#    conteneurs n'a jamais besoin d'un port publie), mais il est IMPOSSIBLE de
+#    les atteindre depuis l'hote en contournant la passerelle. Un `curl
+#    localhost:8003` echoue : seul `localhost:8080` (la passerelle) repond.
+#
+#    Seuls 3 ports sont publies, et pour de bonnes raisons :
+#      - 8080  : la passerelle NGINX — unique porte d'entree applicative
+#      - 15672 : la console d'administration de RabbitMQ (exploitation/captures)
+#      - 9200  : l'API d'inspection d'Elasticsearch (exploitation/captures)
+#    Le port AMQP de RabbitMQ (5672) N'est PAS publie : les services l'utilisent
+#    via le reseau interne (`rabbitmq:5672`), pas via l'hote.
 #
 #  * DEPENDANCES SAINES — `condition: service_healthy` empeche un service de
 #    demarrer avant que sa base (ou RabbitMQ) ne reponde reellement, ce qui
 #    evite les erreurs de connexion au demarrage a froid.
+#
+#  NOTE DEBOGAGE — pour inspecter une base pendant le developpement sans rouvrir
+#  de port, on passe par le conteneur :
+#      docker compose exec tasks-db psql -U todo -d tasks
 # =============================================================================
 
 services:
@@ -45,8 +60,6 @@ services:
       - POSTGRES_DB=auth
     volumes:
       - auth_pgdata:/var/lib/postgresql/data
-    ports:
-      - "5433:5432"
     healthcheck:
       # pg_isready ne repond OK que lorsque le serveur accepte reellement des
       # connexions : c'est ce qui rend `service_healthy` fiable.
@@ -65,8 +78,6 @@ services:
       - POSTGRES_DB=users
     volumes:
       - users_pgdata:/var/lib/postgresql/data
-    ports:
-      - "5434:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U todo -d users"]
       interval: 5s
@@ -83,8 +94,6 @@ services:
       - POSTGRES_DB=tasks
     volumes:
       - tasks_pgdata:/var/lib/postgresql/data
-    ports:
-      - "5435:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U todo -d tasks"]
       interval: 5s
@@ -101,8 +110,6 @@ services:
       - POSTGRES_DB=categories
     volumes:
       - categories_pgdata:/var/lib/postgresql/data
-    ports:
-      - "5440:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U todo -d categories"]
       interval: 5s
@@ -119,8 +126,6 @@ services:
       - POSTGRES_DB=comments
     volumes:
       - comments_pgdata:/var/lib/postgresql/data
-    ports:
-      - "5441:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U todo -d comments"]
       interval: 5s
@@ -137,8 +142,6 @@ services:
       - POSTGRES_DB=workspaces
     volumes:
       - workspaces_pgdata:/var/lib/postgresql/data
-    ports:
-      - "5436:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U todo -d workspaces"]
       interval: 5s
@@ -155,8 +158,6 @@ services:
       - POSTGRES_DB=attachments
     volumes:
       - attachments_pgdata:/var/lib/postgresql/data
-    ports:
-      - "5437:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U todo -d attachments"]
       interval: 5s
@@ -185,8 +186,6 @@ services:
       - MYSQL_PASSWORD=todo
     volumes:
       - notifications_mysqldata:/var/lib/mysql
-    ports:
-      - "3307:3306"
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u todo -ptodo --silent"]
       interval: 5s
@@ -206,8 +205,6 @@ services:
       - MYSQL_PASSWORD=todo
     volumes:
       - emails_mysqldata:/var/lib/mysql
-    ports:
-      - "3308:3306"
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u todo -ptodo --silent"]
       interval: 5s
@@ -229,7 +226,6 @@ services:
       RABBITMQ_DEFAULT_PASS: flowforge_password
       RABBITMQ_DEFAULT_VHOST: flowforge
     ports:
-      - "5672:5672"    # protocole AMQP (utilise par les services)
       - "15672:15672"  # console d'administration web
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
@@ -281,8 +277,6 @@ services:
       - POSTGRES_USER=todo
       - POSTGRES_PASSWORD=todo
       - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
-    ports:
-      - "8002:8000"
     depends_on:
       auth-db:
         condition: service_healthy
@@ -318,8 +312,6 @@ services:
       - USER_EVENTS_DLQ_ROUTING_KEY=user-service.events.failed
       - USER_EVENTS_MAX_ATTEMPTS=3
       - USER_EVENTS_RETRY_BACKOFF_MS=1000
-    ports:
-      - "8001:8000"
     depends_on:
       users-db:
         condition: service_healthy
@@ -352,8 +344,6 @@ services:
       # Bonus : balayage horaire des echeances a moins de 24 h
       - DEADLINE_SCAN_CRON=0 0 * * * *
       - DEADLINE_WINDOW_HOURS=24
-    ports:
-      - "8003:8000"
     depends_on:
       tasks-db:
         condition: service_healthy
@@ -385,8 +375,6 @@ services:
       - USER_SERVICE_BASE_URL=http://user-service:8000
       - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
       - RABBITMQ_EXCHANGE=flowforge.events
-    ports:
-      - "8009:8000"
     depends_on:
       categories-db:
         condition: service_healthy
@@ -418,8 +406,6 @@ services:
       - TASK_SERVICE_BASE_URL=http://task-service:8000
       - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
       - RABBITMQ_EXCHANGE=flowforge.events
-    ports:
-      - "8010:8000"
     depends_on:
       comments-db:
         condition: service_healthy
@@ -442,8 +428,6 @@ services:
       - INTERNAL_API_KEY=INTERNAL-CHANGE-ME
       - PORT=8000
       - TASK_SERVICE_BASE_URL=http://task-service:8000
-    ports:
-      - "8011:8000"
     depends_on:
       task-service:
         condition: service_started
@@ -474,8 +458,6 @@ services:
       - NOTIFICATION_DLQ_ROUTING_KEY=notification-service.events.failed
       - NOTIFICATION_MAX_ATTEMPTS=3
       - NOTIFICATION_RETRY_BACKOFF_MS=1000
-    ports:
-      - "8006:8000"
     depends_on:
       notifications-db:
         condition: service_healthy
@@ -509,8 +491,6 @@ services:
       - WORKSPACE_DLQ_ROUTING_KEY=workspace-service.events.failed
       - WORKSPACE_MAX_ATTEMPTS=3
       - WORKSPACE_RETRY_BACKOFF_MS=1000
-    ports:
-      - "8004:8000"
     depends_on:
       workspaces-db:
         condition: service_healthy
@@ -540,8 +520,6 @@ services:
       - ATTACHMENT_ALLOWED_CONTENT_TYPES=image/jpeg,image/png,image/webp,application/pdf,text/plain
       - ATTACHMENT_SIGNED_URL_TTL_SECONDS=900
       - RABBITMQ_URL=amqp://flowforge:flowforge_password@rabbitmq:5672/flowforge
-    ports:
-      - "8005:8000"
     depends_on:
       attachments-db:
         condition: service_healthy
@@ -578,8 +556,6 @@ services:
       - SMTP_FROM=${SMTP_FROM:-noreply@flowforge.local}
       - SMTP_AUTH_ENABLED=${SMTP_AUTH_ENABLED:-true}
       - SMTP_STARTTLS_ENABLED=${SMTP_STARTTLS_ENABLED:-true}
-    ports:
-      - "8007:8000"
     depends_on:
       emails-db:
         condition: service_healthy
@@ -609,8 +585,6 @@ services:
       - CATEGORY_SERVICE_BASE_URL=http://category-service:8000
       - WORKSPACE_SERVICE_BASE_URL=http://workspace-service:8000
       - USER_SERVICE_BASE_URL=http://user-service:8000
-    ports:
-      - "8008:8000"
     depends_on:
       rabbitmq:
         condition: service_healthy

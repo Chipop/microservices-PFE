@@ -28,14 +28,18 @@ un est le **bonus**, un est de la **cohérence**.
 
 ---
 
-## 1. OBLIGATOIRE — Servir la SPA depuis `/` via la passerelle
+## 1. OBLIGATOIRE — Tout faire passer par la passerelle (SPA depuis `/` + fermeture des ports directs)
 
 > **Contrainte du sujet :** « Frontend servi depuis la racine `/` » et « Via l'API Gateway
 > uniquement ».
 
-**Problème actuel.** `server/api-gateway/nginx.conf` renvoie encore une chaîne de texte à la
-racine (`return 200 "API Gateway up. Routes: ..."`), et le conteneur `frontend` publie son
-propre port `9000:9000` — donc la SPA est accessible **en contournant** la passerelle.
+**Problème actuel.** Deux choses cassent la contrainte « via la passerelle uniquement » :
+`server/api-gateway/nginx.conf` renvoie encore une chaîne de texte à la racine
+(`return 200 "API Gateway up. Routes: ..."`) au lieu de servir la SPA, le conteneur
+`frontend` publie son propre port `9000:9000`, **et** chaque microservice et chaque base
+publie son port direct sur l'hôte (`8002:8000`, `5433:5432`, …). Résultat : on peut
+contourner la passerelle de partout. Ce chantier a donc trois volets — 1a (nginx), 1b
+(frontend), **1c (fermer tous les ports directs)**.
 
 C'est le changement le **moins cher** de la liste et il vaut deux points de conformité.
 
@@ -110,13 +114,69 @@ Et ajouter `frontend` aux dépendances de la passerelle :
       # ...
 ```
 
+### 1c. `docker-compose.yml` — fermer TOUS les ports directs des services et des bases
+
+C'est le point le plus important, et le plus facile à oublier. Le rapport affirme
+(chapitre 2) : *« Aucun service backend n'est joignable directement depuis l'extérieur du
+réseau Docker »*, et le schéma de topologie ne publie que **3 ports**. Or le
+`docker-compose.yml` **actuel** publie un port pour **chaque** service (`8002:8000`,
+`8001:8000`, …) et **chaque** base (`5433:5432`, …). Tant que ces lignes sont là,
+l'affirmation est **fausse** : `curl http://localhost:8003/api/tasks/` atteint le
+task-service **sans passer par NGINX**.
+
+**Correctif : supprimer la section `ports:` de TOUS les microservices backend (11) et de
+TOUTES les bases (9).** Elles restent joignables par NGINX et entre elles via le réseau
+interne Docker — la communication entre conteneurs n'a **jamais** eu besoin d'un port
+publié sur l'hôte ; seul `ports:` expose vers l'hôte.
+
+Exemple, sur `auth-service` :
+
+```yaml
+  auth-service:
+    build: ./server/auth-service
+    # ...
+    ports:              # <-- SUPPRIMER CES DEUX LIGNES
+      - "8002:8000"     # <-- le service ne doit etre joignable QUE via la passerelle
+    depends_on:
+      # ...
+```
+
+À répéter pour : `user-service`, `task-service`, `category-service`, `comment-service`,
+`statistics-service`, `notification-service`, `workspace-service`, `attachment-service`,
+`email-service`, `search-service`, **et** les 9 conteneurs `*-db`.
+
+**Ne garder que 3 ports publiés au total :**
+
+| Conteneur | Port | Pourquoi on le garde |
+|---|---|---|
+| `api-gateway` | `8080:80` | Unique porte d'entrée applicative |
+| `rabbitmq` | `15672:15672` | Console d'admin (exploitation + capture d'écran) |
+| `elasticsearch` | `9200:9200` | Inspection des index (exploitation + capture d'écran) |
+
+Sur `rabbitmq`, **retirer** la ligne `- "5672:5672"` (les services utilisent
+`rabbitmq:5672` en interne ; l'hôte n'a pas besoin du port AMQP).
+
+> ✅ Le `docker-compose.yml` **cible, déjà corrigé**, est prêt :
+> `rapport/annexes/docker-compose.yml`. Pour déboguer une base sans rouvrir de port :
+> `docker compose exec tasks-db psql -U todo -d tasks`.
+
 ### Vérification
 
 ```bash
 docker compose up -d --build
-curl -I http://localhost:8080/          # doit renvoyer le HTML de la SPA (200)
-curl    http://localhost:8080/healthz   # doit renvoyer "gateway ok"
-curl -I http://localhost:9000/          # doit ECHOUER (connexion refusée) = objectif atteint
+curl -I http://localhost:8080/          # SPA servie par la passerelle (200)
+curl    http://localhost:8080/healthz   # "gateway ok"
+curl -I http://localhost:8080/api/tasks/  # atteint task-service VIA la passerelle (401/200)
+
+# Les acces DIRECTS doivent tous ECHOUER (connexion refusee) = objectif atteint :
+curl -I http://localhost:9000/          # frontend  -> refuse
+curl -I http://localhost:8003/          # task-service -> refuse
+curl -I http://localhost:5435/          # tasks-db  -> refuse
+
+# Seuls les 3 ports d'infra repondent encore :
+curl -I http://localhost:8080/          # passerelle -> OK
+curl -sI http://localhost:15672/ | head -1   # console RabbitMQ -> OK
+curl -s  http://localhost:9200/_cat/indices  # Elasticsearch -> OK
 ```
 
 ---
